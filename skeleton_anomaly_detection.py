@@ -140,9 +140,24 @@ iso_scores = -iso_forest.decision_function(X_test_scaled)
 
 # ============================================================
 # STEP 4: Train One-Class SVM
+# ------------------------------------------------------------
+# OC-SVM training cost grows roughly quadratically with row count and
+# becomes impractically slow past ~50k rows. Manas'''s raw data is
+# already at 330K+ rows before he'''s even finished feature engineering,
+# so real X_train will almost certainly need subsampling here.
 # ============================================================
+OC_SVM_MAX_TRAIN_SIZE = 30000
+
+if X_train_scaled.shape[0] > OC_SVM_MAX_TRAIN_SIZE:
+    rng = np.random.RandomState(RANDOM_STATE)
+    subsample_idx = rng.choice(X_train_scaled.shape[0], size=OC_SVM_MAX_TRAIN_SIZE, replace=False)
+    X_train_svm = X_train_scaled[subsample_idx]
+    print(f"OC-SVM: subsampled training set from {X_train_scaled.shape[0]:,} to {OC_SVM_MAX_TRAIN_SIZE:,} rows (scalability limit)")
+else:
+    X_train_svm = X_train_scaled
+
 oc_svm = OneClassSVM(kernel="rbf", nu=0.02, gamma="scale")
-oc_svm.fit(X_train_scaled)
+oc_svm.fit(X_train_svm)
 svm_scores = -oc_svm.decision_function(X_test_scaled)
 
 # ============================================================
