@@ -74,3 +74,44 @@ print(merged.head(10))
 print("\nShape:", merged.shape)
 print("\nFiles accessed stats:")
 print(merged['files_accessed_count'].describe())
+email_path = r"C:\Users\manas\Downloads\r4.2.tar(1)\r4.2(1)\r4.2\email.csv"
+email_df = pd.read_csv(email_path)
+email_df['date'] = pd.to_datetime(email_df['date'])
+email_df['day'] = email_df['date'].dt.date
+
+email_daily = email_df.groupby(['user', 'day']).size().reset_index(name='email_count')
+
+print("\nDaily email counts:")
+print(email_daily.head(10))
+print("\nShape:", email_daily.shape)
+
+merged = merged.merge(email_daily, on=['user', 'day'], how='left')
+merged['email_count'] = merged['email_count'].fillna(0).astype(int)
+
+print("\nMerged table now (logon + usb + file + email):")
+print(merged.head(10))
+print("\nShape:", merged.shape)
+insiders_path = r"C:\Users\manas\Downloads\answers\answers\insiders.csv"
+insiders = pd.read_csv(insiders_path)
+
+# Only keep r4.2 insiders
+insiders_42 = insiders[insiders['dataset'] == 4.2].copy()
+insiders_42['start'] = pd.to_datetime(insiders_42['start'])
+insiders_42['end'] = pd.to_datetime(insiders_42['end'])
+
+print("\nMalicious users in r4.2:")
+print(insiders_42[['user', 'start', 'end']])
+merged['day'] = pd.to_datetime(merged['day'])
+merged['is_malicious'] = 0
+
+for _, row in insiders_42.iterrows():
+    mask = (
+        (merged['user'] == row['user']) &
+        (merged['day'] >= row['start'].normalize()) &
+        (merged['day'] <= row['end'].normalize())
+    )
+    merged.loc[mask, 'is_malicious'] = 1
+
+print("\nLabel distribution:")
+print(merged['is_malicious'].value_counts())
+print("\nPercentage malicious:", (merged['is_malicious'].sum() / len(merged)) * 100, "%")
