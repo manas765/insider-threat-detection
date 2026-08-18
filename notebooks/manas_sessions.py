@@ -115,3 +115,43 @@ for _, row in insiders_42.iterrows():
 print("\nLabel distribution:")
 print(merged['is_malicious'].value_counts())
 print("\nPercentage malicious:", (merged['is_malicious'].sum() / len(merged)) * 100, "%")
+merged = merged.sort_values('day').reset_index(drop=True)
+
+split_index = int(len(merged) * 0.8)
+train = merged.iloc[:split_index]
+test = merged.iloc[split_index:]
+
+print("Train date range:", train['day'].min(), "to", train['day'].max())
+print("Test date range:", test['day'].min(), "to", test['day'].max())
+print("\nTrain shape:", train.shape)
+print("Test shape:", test.shape)
+
+print("\nTrain malicious count:", train['is_malicious'].sum())
+print("Test malicious count:", test['is_malicious'].sum())
+from imblearn.over_sampling import SMOTE
+
+feature_cols = ['login_hour', 'after_hours_flag', 'session_duration_mins',
+                 'usb_events_count', 'files_accessed_count', 'email_count']
+
+X_train = train[feature_cols]
+y_train = train['is_malicious']
+X_test = test[feature_cols]
+y_test = test['is_malicious']
+
+print("\nBefore SMOTE:", y_train.value_counts().to_dict())
+
+smote = SMOTE(random_state=42)
+X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+
+print("After SMOTE:", y_train_resampled.value_counts().to_dict())
+import os
+os.makedirs('data/processed', exist_ok=True)
+
+X_train_resampled.to_csv('data/processed/X_train.csv', index=False)
+y_train_resampled.to_csv('data/processed/y_train.csv', index=False)
+X_test.to_csv('data/processed/X_test.csv', index=False)
+y_test.to_csv('data/processed/y_test.csv', index=False)
+
+print("\nExported successfully!")
+print("X_train:", X_train_resampled.shape)
+print("X_test:", X_test.shape)
