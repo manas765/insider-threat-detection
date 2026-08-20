@@ -155,3 +155,50 @@ y_test.to_csv('data/processed/y_test.csv', index=False)
 print("\nExported successfully!")
 print("X_train:", X_train_resampled.shape)
 print("X_test:", X_test.shape)
+http_path = r"C:\Users\manas\Downloads\r4.2.tar(1)\r4.2(1)\r4.2\http.csv"
+
+# http.csv is large, so read only the columns we need, in chunks
+domains_list = []
+chunksize = 500000
+for chunk in pd.read_csv(http_path, usecols=['date', 'user', 'url'], chunksize=chunksize):
+    chunk['date'] = pd.to_datetime(chunk['date'])
+    chunk['day'] = chunk['date'].dt.date
+    chunk['domain'] = chunk['url'].str.extract(r'://([^/]+)/')
+    domains_list.append(chunk[['user', 'day', 'domain']])
+
+http_df = pd.concat(domains_list, ignore_index=True)
+domains_daily = http_df.groupby(['user', 'day'])['domain'].nunique().reset_index(name='unique_domains_visited')
+
+print("\nDaily unique domains visited:")
+print(domains_daily.head(10))
+print("\nShape:", domains_daily.shape)
+# Check what domains look like in email 'to' field to find the internal company domain
+print("\nSample of 'to' email addresses:")
+print(email_df['to'].dropna().sample(20, random_state=1).tolist())
+def count_external_recipients(to_field):
+    if pd.isna(to_field):
+        return 0
+    recipients = to_field.split(';')
+    return sum(1 for r in recipients if 'dtaa.com' not in r.lower())
+
+email_df['ext_recipient_count'] = email_df['to'].apply(count_external_recipients)
+email_df['day'] = pd.to_datetime(email_df['date']).dt.date
+
+ext_daily = email_df.groupby(['user', 'day'])['ext_recipient_count'].sum().reset_index(name='email_ext_recipient_count')
+
+print("\nDaily external recipient counts:")
+print(ext_daily.head(10))
+print("\nShape:", ext_daily.shape)
+print("\nStats:")
+print(ext_daily['email_ext_recipient_count'].describe())
+merged['day'] = merged['day'].dt.date  # convert back to match domains_daily/ext_daily format
+
+merged = merged.merge(domains_daily, on=['user', 'day'], how='left')
+merged['unique_domains_visited'] = merged['unique_domains_visited'].fillna(0).astype(int)
+
+merged = merged.merge(ext_daily, on=['user', 'day'], how='left')
+merged['email_ext_recipient_count'] = merged['email_ext_recipient_count'].fillna(0).astype(int)
+
+print("\nFinal merged table with all features so far:")
+print(merged.columns.tolist())
+print("Shape:", merged.shape)
