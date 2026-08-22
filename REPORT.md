@@ -1,3 +1,11 @@
+## 1. Introduction
+
+Insider threats — malicious or negligent actions by employees, contractors, or other trusted users within an organization — are among the hardest security risks to detect, since insiders already have legitimate access to systems and data. Unlike external attacks, insider threats often look like normal, everyday activity, making them difficult to catch using traditional rule-based security systems.
+
+This project applies machine learning to detect anomalous user behavior that may indicate insider threats, using the **CERT r4.2 Insider Threat dataset** — a synthetic but realistic dataset simulating organizational logs (logons, file access, email, web browsing, and USB device activity) alongside known ground-truth insider threat scenarios.
+
+The goal is to engineer meaningful behavioral features from raw activity logs, then train and compare multiple anomaly detection approaches — **Isolation Forest**, **One-Class SVM**, and an **Autoencoder** — to identify which method most effectively separates malicious behavior from normal daily activity, despite the extreme class imbalance typical of real-world insider threat data.
+
 ## 2. Data & Feature Engineering
 
 ### Data Sources
