@@ -205,4 +205,20 @@ plt.tight_layout()
 plt.savefig("roc_comparison.png")
 plt.show()
 
+# ============================================================
+# STEP 7: Export scores for Aakash's comparison.ipynb
+# ------------------------------------------------------------
+# Aakash needs these model score arrays to build the final 3-way
+# comparison (vs. his autoencoder). One row per test-set sample:
+# the true label plus both models' raw anomaly scores. Format to
+# be confirmed with him -- this is a reasonable starting point.
+# ============================================================
+results_df = pd.DataFrame({
+    "true_label": np.asarray(y_test),
+    "iso_forest_score": iso_scores,
+    "oc_svm_score": svm_scores,
+})
+results_df.to_csv("model_scores_for_comparison.csv", index=False)
+print(f"\nSaved model scores to model_scores_for_comparison.csv ({len(results_df)} rows) -- for Aakash's comparison.ipynb")
+
 print("\nDone. Once real data is in place (USE_REAL_DATA = True), everything above runs unchanged.")
