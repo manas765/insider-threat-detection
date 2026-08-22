@@ -202,3 +202,31 @@ merged['email_ext_recipient_count'] = merged['email_ext_recipient_count'].fillna
 print("\nFinal merged table with all features so far:")
 print(merged.columns.tolist())
 print("Shape:", merged.shape)
+merged = merged.sort_values('day').reset_index(drop=True)
+
+split_index = int(len(merged) * 0.8)
+train = merged.iloc[:split_index]
+test = merged.iloc[split_index:]
+
+feature_cols = ['login_hour', 'after_hours_flag', 'session_duration_mins',
+                 'usb_events_count', 'files_accessed_count', 'email_count',
+                 'unique_domains_visited', 'email_ext_recipient_count']
+
+X_train = train[feature_cols]
+y_train = train['is_malicious']
+X_test = test[feature_cols]
+y_test = test['is_malicious']
+
+from imblearn.over_sampling import SMOTE
+smote = SMOTE(random_state=42)
+X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+
+X_train_resampled.to_csv('data/processed/X_train.csv', index=False)
+y_train_resampled.to_csv('data/processed/y_train.csv', index=False)
+X_test.to_csv('data/processed/X_test.csv', index=False)
+y_test.to_csv('data/processed/y_test.csv', index=False)
+
+print("\nRe-exported with 8 features!")
+print("X_train:", X_train_resampled.shape)
+print("X_test:", X_test.shape)
+print("Feature columns:", feature_cols)
