@@ -50,3 +50,23 @@ Because malicious user-days are rare, three versions of the training data were e
 | `X_train_smote.csv` | SMOTE-balanced training data (synthetic minority samples added) | Reserved for a supervised baseline comparison only — not used for the anomaly detection models, since synthetic minority samples would distort the "normal" behavior boundary these models rely on |
 
 The test set (`X_test.csv`, `y_test.csv`) was left untouched and unresampled in all cases, ensuring evaluation always reflects real-world class distribution.
+
+## 3. Models
+
+Three anomaly detection approaches were trained and compared, each learning a profile of "normal" user behavior from the benign-only training data (`X_train_benign.csv`), then flagging deviations as potential insider threats.
+
+### 3.1 Isolation Forest
+- **Approach:** [Pushkar to fill in — e.g. number of trees, contamination parameter, any tuning]
+- **Training data:** X_train_benign.csv
+- **Key parameters:** [TBD]
+
+### 3.2 One-Class SVM
+- **Approach:** [Pushkar to fill in — e.g. kernel type, nu parameter, any tuning]
+- **Training data:** X_train_benign.csv
+- **Key parameters:** [TBD]
+
+### 3.3 Autoencoder
+- **Approach:** Neural network trained to reconstruct normal behavior patterns; anomalies are flagged where reconstruction error exceeds a threshold
+- **Training data:** X_train_benign.csv
+- **Key parameters:** [Aakash to fill in — e.g. architecture/layers, threshold percentile used]
+- **Result:** AUC = 0.78 (see `reports/roc_autoencoder.png`)
