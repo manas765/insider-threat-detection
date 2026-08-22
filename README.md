@@ -1,136 +1,54 @@
-\# Insider Threat / Data Exfiltration Detection
+# Insider Threat Detection (CERT r4.2)
 
+ML project to detect insider threats using behavioral features extracted from the CERT r4.2 dataset.
 
+## Team
+- **Manas** — data pipeline (feature engineering, labeling, train/test split, exports)
+- **Pushkar** — Isolation Forest + One-Class SVM
+- **Aakash** — Autoencoder (v2)
 
-A machine learning project to detect insider threats and data exfiltration from corporate network/endpoint logs, built on the CERT Insider Threat Dataset (r4.2).
+## Data Pipeline
 
+Raw CERT r4.2 log files (`logon.csv`, `device.csv`, `file.csv`, `email.csv`, `http.csv`) are aggregated into **daily per-user features**.
 
+### Features (9 total)
 
-\## Problem
-
-
-
-Malicious data exfiltration by employees or compromised accounts is extremely rare compared to normal daily activity, creating an extreme class imbalance problem — similar to fraud detection. This project builds and compares multiple anomaly detection approaches on real, labeled insider-threat data.
-
-
-
-\## Team
-
-
-
-| Person | Responsibility |
-
+| Feature | Description |
 |---|---|
-
-| Manas | Data pipeline: parsing, feature engineering, labeling, SMOTE, train/test split |
-
-| Pushkar | Isolation Forest + One-Class SVM models |
-
-| Aakash | Autoencoder model + final comparison report |
-
-
-
-\## Dataset
-
-
-
-CERT Insider Threat Dataset r4.2 — includes logon, device (USB), file access, and email activity logs for \~1000 simulated employees, with 70 labeled malicious insider scenarios.
-
-
-
-\## Features Used
-
-
-
-One row per user per day, built from raw event logs:
-
-
-
-\- `login\_hour` — hour of first login
-
-\- `after\_hours\_flag` — 1 if any login occurred before 6am or after 6pm
-
-\- `session\_duration\_mins` — total time logged in that day
-
-\- `usb\_events\_count` — number of USB connect events
-
-\- `files\_accessed\_count` — number of files accessed
-
-\- `email\_count` — number of emails sent
-
-\- `unique\_domains\_visited` — distinct websites visited
-
-\- `email\_ext\_recipient\_count` — emails sent to external (non-company) domains
-
-
-
-Label: `is\_malicious` (1 = insider threat activity, 0 = normal), sourced from ground-truth insider scenario data.
-
-
-
-\## Methodology
-
-
-
-1\. Parsed raw CERT logs into daily aggregated features (see `notebooks/manas\_sessions.py`)
-
-2\. Labeled rows using ground-truth insider scenario date ranges
-
-3\. Time-aware train/test split (80/20) to avoid temporal data leakage
-
-4\. Applied SMOTE to the training set only, to address extreme class imbalance (\~0.4% malicious)
-
-5\. Trained and compared: Isolation Forest, One-Class SVM, and a Dense Autoencoder
-
-6\. Evaluated using AUC-ROC, Precision-Recall AUC, and F1-score (not raw accuracy, due to imbalance)
-
-
-
-\## Repository Structure
-
-
-
-\\`\\`\\`
-
-insider-threat-detection/
-
-├── data/processed/       # X\_train, X\_test, y\_train, y\_test (exported, ready to use)
-
-├── notebooks/             # exploration and pipeline scripts
-
-├── src/
-
-│   ├── pushkar/            # Isolation Forest + OC-SVM
-
-│   └── aakash/            # Autoencoder + comparison
-
-├── reports/               # ROC curves, comparison plots
-
-└── requirements.txt
-
-\\`\\`\\`
-
-
-
-\## Setup
-
-
-
-\\`\\`\\`
-
-python -m venv venv
-
-venv\\\\Scripts\\\\activate
-
-pip install -r requirements.txt
-
-\\`\\`\\`
-
-
-
-\## Results
-
-
-
-\*(To be filled in once all three models are compared — final AUC-ROC, PR-AUC, F1 scores for each model)\*
-
+| `login_hour` | Hour of first logon session that day |
+| `after_hours_flag` | 1 if login was before 6 AM or after 6 PM |
+| `session_duration_mins` | Total logged-in minutes that day |
+| `usb_events_count` | Number of USB connect events that day |
+| `files_accessed_count` | Number of file access events that day |
+| `email_count` | Number of emails sent that day |
+| `unique_domains_visited` | Number of unique web domains visited that day |
+| `email_ext_recipient_count` | Number of emails sent to recipients outside the `dtaa.com` domain |
+| `file_copy_to_removable` | Number of file accesses that occurred during an active USB connect/disconnect window (possible exfiltration signal) |
+
+### Labeling
+
+Ground-truth malicious activity comes from `insiders.csv` (filtered to r4.2). A user-day is labeled `is_malicious = 1` if it falls within that user's known malicious activity window (`start` to `end` dates); otherwise `0`.
+
+### Train/Test Split
+
+The data is **sorted by date** and split **80/20** (not random) — the first 80% of days become the train set, the last 20% become the test set. This mimics a real deployment where you train on past behavior and detect anomalies in future behavior.
+
+### Exported Files (`data/processed/`)
+
+| File | Contents | Intended use |
+|---|---|---|
+| `X_train_raw.csv` / `y_train_raw.csv` | Real, unresampled train data (all classes) | Models that need true class distribution |
+| `X_train_benign.csv` | Only benign (`is_malicious == 0`) train rows | **Autoencoder / one-class models** — train on "normal" behavior only |
+| `X_train_smote.csv` / `y_train_smote.csv` | SMOTE-balanced train data (synthetic minority samples added) | Supervised baseline models only — **do not use for unsupervised/anomaly models** |
+| `X_test.csv` / `y_test.csv` | Real, untouched test set | Evaluation for all models |
+
+⚠️ **Important:** Isolation Forest, OC-SVM, and the autoencoder should train on `X_train_benign.csv` or `X_train_raw.csv` — **not** `X_train_smote.csv`. SMOTE generates synthetic minority-class samples, which distorts what "normal" looks like for anomaly-detection models.
+
+## Status
+- [x] Data pipeline built, labeled, split, exported
+- [ ] Isolation Forest + OC-SVM trained (Pushkar)
+- [ ] Autoencoder retrained on v2 data (Aakash)
+- [ ] Shared evaluation across all 3 models
+- [ ] Final report
+
+**Deadline:** Aug 30
