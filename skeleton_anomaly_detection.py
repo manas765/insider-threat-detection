@@ -2,223 +2,117 @@
 Isolation Forest + One-Class SVM -- Insider Threat Detection Project
 Person 2 (Pushkar)
 
-FINAL locked schema (confirmed by Manas & Aakash, CERT r4.2-based):
-  13 total columns:
-    user_id, date, login_hour, after_hours_flag, session_duration_mins,
-    files_accessed_count, bytes_transferred, usb_events_count,
-    unique_domains_visited, email_count, email_ext_recipient_count,
-    file_copy_to_removable, is_malicious
+REAL DATA VERSION -- the fake-data/dummy-data era of this script is over.
+Manas's real dataset has landed and is confirmed usable (263,117 benign
+rows in X_train_benign.csv).
 
-  10 model input features (user_id, date, is_malicious excluded):
-    login_hour, after_hours_flag, session_duration_mins,
-    files_accessed_count, bytes_transferred, usb_events_count,
-    unique_domains_visited, email_count, email_ext_recipient_count,
-    file_copy_to_removable
+FINAL locked feature set (8 columns). Note: X_train_benign.csv currently
+still contains a 9th column, file_copy_to_removable -- Manas investigated
+this feature and found it's broken for this dataset (USB activity is too
+dense/constant to meaningfully signal file copying) and recommended
+dropping it. The CSV export just hasn't been updated to remove it yet,
+so we explicitly select only the 8 confirmed-good columns below rather
+than trusting the file to already be clean.
 
-  Note: failed_login_count was DROPPED (logon.csv has no failed-attempt
-  data) -- replaced by email_ext_recipient_count and file_copy_to_removable.
-
-DELIVERY (confirmed by Manas): real data lands as four separate files
-in data/processed/ on the main branch:
-  data/processed/X_train.csv
-  data/processed/X_test.csv
-  data/processed/y_train.csv
-  data/processed/y_test.csv
-Once he pushes those: git pull on main, then flip USE_REAL_DATA to
-True below. Nothing else in this script needs to change.
+TRAINING METHODOLOGY (per notebooks/evaluate.py, and to avoid repeating
+the 100% AUC bug the team found):
+  - Train ONLY on X_train_benign.csv (already filtered to normal rows).
+  - Predict using each model's OWN built-in .predict() (the
+    contamination/nu threshold set at train time) -- NOT a
+    best-possible-F1 threshold searched over the test set. Searching
+    for the "best" threshold using test labels is a subtle form of
+    leakage/optimism bias, and is very likely part of why the earlier
+    comparison chart showed suspicious 100% scores.
+  - Evaluate through the SHARED notebooks/evaluate.py evaluate_model()
+    function, using its own X_test/y_test, so results stay comparable
+    with Aakash's and consistent with the team's methodology.
 """
 
+import sys
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import IsolationForest
 from sklearn.svm import OneClassSVM
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import (
-    roc_auc_score, average_precision_score, precision_recall_curve,
-    confusion_matrix, roc_curve
-)
-import matplotlib.pyplot as plt
+
+sys.path.append("notebooks")
+from evaluate import evaluate_model, X_test, y_test  # shared test set + evaluator
 
 RANDOM_STATE = 42
-np.random.seed(RANDOM_STATE)
 
 # ============================================================
 # STEP 1: Load data
-# ------------------------------------------------------------
-# Flip this to True once you've pulled Manas's real files from
-# data/processed/ on main. That's the ONLY line you need to change.
 # ============================================================
-USE_REAL_DATA = False
-
 FEATURE_COLUMNS = [
     "login_hour", "after_hours_flag", "session_duration_mins",
-    "files_accessed_count", "bytes_transferred", "usb_events_count",
-    "unique_domains_visited", "email_count",
-    "email_ext_recipient_count", "file_copy_to_removable",
+    "usb_events_count", "files_accessed_count", "email_count",
+    "unique_domains_visited", "email_ext_recipient_count",
 ]
 
-if USE_REAL_DATA:
-    X_train = pd.read_csv("data/processed/X_train.csv")
-    X_test = pd.read_csv("data/processed/X_test.csv")
-    y_train = pd.read_csv("data/processed/y_train.csv").values.ravel()
-    y_test = pd.read_csv("data/processed/y_test.csv").values.ravel()
+X_train_benign = pd.read_csv("data/processed/X_train_benign.csv")[FEATURE_COLUMNS]
+X_test_features = X_test[FEATURE_COLUMNS]
 
-else:
-    # FAKE DATA -- shaped to match the final locked schema, with a
-    # synthetic exfiltration pattern baked in so the models have
-    # something real to detect while we're testing the pipeline.
-    N_NORMAL = 5880
-    N_MALICIOUS = 120  # ~2% anomaly rate, matching expected imbalance
-
-    def fake_rows(n, malicious):
-        if not malicious:
-            return pd.DataFrame({
-                "user_id": [f"EMP_{i:04d}" for i in np.random.randint(1, 201, n)],
-                "date": pd.to_datetime("2026-01-01") + pd.to_timedelta(np.random.randint(0, 60, n), unit="D"),
-                "login_hour": np.clip(np.random.normal(9, 1.5, n), 0, 23).astype(int),
-                "session_duration_mins": np.clip(np.random.normal(480, 60, n), 30, None),
-                "files_accessed_count": np.random.poisson(15, n),
-                "bytes_transferred": np.random.lognormal(mean=13, sigma=0.5, size=n),
-                "usb_events_count": np.random.poisson(0.2, n),
-                "unique_domains_visited": np.random.poisson(8, n),
-                "email_count": np.random.poisson(20, n),
-                "email_ext_recipient_count": np.random.poisson(0.3, n),
-                "file_copy_to_removable": np.random.poisson(0.1, n),
-            })
-        else:
-            return pd.DataFrame({
-                "user_id": [f"EMP_{i:04d}" for i in np.random.randint(1, 201, n)],
-                "date": pd.to_datetime("2026-01-01") + pd.to_timedelta(np.random.randint(0, 60, n), unit="D"),
-                "login_hour": np.clip(np.random.normal(22, 3, n), 0, 23).astype(int),
-                "session_duration_mins": np.clip(np.random.normal(200, 100, n), 10, None),
-                "files_accessed_count": np.random.poisson(60, n),
-                "bytes_transferred": np.random.lognormal(mean=16, sigma=0.7, size=n),
-                "usb_events_count": np.random.poisson(2.5, n),
-                "unique_domains_visited": np.random.poisson(15, n),
-                "email_count": np.random.poisson(10, n),
-                "email_ext_recipient_count": np.random.poisson(3, n),
-                "file_copy_to_removable": np.random.poisson(3.5, n),
-            })
-
-    df = pd.concat([
-        fake_rows(N_NORMAL, malicious=False).assign(is_malicious=0),
-        fake_rows(N_MALICIOUS, malicious=True).assign(is_malicious=1),
-    ], ignore_index=True)
-
-    df["after_hours_flag"] = ((df["login_hour"] < 6) | (df["login_hour"] > 18)).astype(int)
-    df = df.sample(frac=1, random_state=RANDOM_STATE).reset_index(drop=True)
-
-    X = df[FEATURE_COLUMNS]
-    y = df["is_malicious"]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, stratify=y, random_state=RANDOM_STATE
-    )
-
-print(f"Train shape: {X_train.shape}, anomalies in train: {y_train.sum()} ({y_train.mean()*100:.2f}%)")
-print(f"Test shape:  {X_test.shape}, anomalies in test:  {y_test.sum()} ({y_test.mean()*100:.2f}%)")
+print(f"Train (benign only): {X_train_benign.shape}")
+print(f"Test: {X_test_features.shape}, malicious in test: {int(y_test.sum())} ({y_test.mean()*100:.2f}%)")
 
 # ============================================================
 # STEP 2: Scale features
+# ------------------------------------------------------------
+# evaluate.py's example doesn't scale, but OC-SVM (RBF kernel) is
+# sensitive to feature scale, so we scale anyway -- fit on train,
+# apply to test, standard practice.
 # ============================================================
 scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+X_train_scaled = scaler.fit_transform(X_train_benign)
+X_test_scaled = scaler.transform(X_test_features)
 
 # ============================================================
-# STEP 3: Train Isolation Forest
-# ============================================================
-iso_forest = IsolationForest(
-    n_estimators=200,
-    contamination=0.02,
-    max_features=1.0,
-    random_state=RANDOM_STATE
-)
-iso_forest.fit(X_train_scaled)
-iso_scores = -iso_forest.decision_function(X_test_scaled)
-
-# ============================================================
-# STEP 4: Train One-Class SVM
+# STEP 3: OC-SVM scalability guard
 # ------------------------------------------------------------
-# OC-SVM training cost grows roughly quadratically with row count and
-# becomes impractically slow past ~50k rows. Manas'''s raw data is
-# already at 330K+ rows before he'''s even finished feature engineering,
-# so real X_train will almost certainly need subsampling here.
+# 263K rows is way past the ~50k practical limit for OC-SVM training.
 # ============================================================
 OC_SVM_MAX_TRAIN_SIZE = 30000
-
 if X_train_scaled.shape[0] > OC_SVM_MAX_TRAIN_SIZE:
     rng = np.random.RandomState(RANDOM_STATE)
-    subsample_idx = rng.choice(X_train_scaled.shape[0], size=OC_SVM_MAX_TRAIN_SIZE, replace=False)
-    X_train_svm = X_train_scaled[subsample_idx]
-    print(f"OC-SVM: subsampled training set from {X_train_scaled.shape[0]:,} to {OC_SVM_MAX_TRAIN_SIZE:,} rows (scalability limit)")
+    idx = rng.choice(X_train_scaled.shape[0], size=OC_SVM_MAX_TRAIN_SIZE, replace=False)
+    X_train_svm = X_train_scaled[idx]
+    print(f"OC-SVM: subsampled training set from {X_train_scaled.shape[0]:,} to {OC_SVM_MAX_TRAIN_SIZE:,} rows")
 else:
     X_train_svm = X_train_scaled
 
-oc_svm = OneClassSVM(kernel="rbf", nu=0.02, gamma="scale")
-oc_svm.fit(X_train_svm)
-svm_scores = -oc_svm.decision_function(X_test_scaled)
+# ============================================================
+# STEP 4: Train + evaluate Isolation Forest
+# ============================================================
+iso_model = IsolationForest(n_estimators=200, contamination=0.02, random_state=RANDOM_STATE)
+iso_model.fit(X_train_scaled)
+
+raw_preds = iso_model.predict(X_test_scaled)           # -1 = anomaly, 1 = normal
+y_pred_iso = [1 if p == -1 else 0 for p in raw_preds]   # convert to match y_test (0/1)
+scores_iso = -iso_model.score_samples(X_test_scaled)    # higher = more anomalous
+
+iso_results = evaluate_model(y_test, y_pred_iso, scores_iso, model_name="Isolation Forest")
 
 # ============================================================
-# STEP 5: Evaluate both models
+# STEP 5: Train + evaluate One-Class SVM
 # ============================================================
-def evaluate(y_true, scores, model_name):
-    roc_auc = roc_auc_score(y_true, scores)
-    pr_auc = average_precision_score(y_true, scores)
+ocsvm_model = OneClassSVM(kernel="rbf", nu=0.02, gamma="scale")
+ocsvm_model.fit(X_train_svm)
 
-    precisions, recalls, thresholds = precision_recall_curve(y_true, scores)
-    f1s = 2 * (precisions * recalls) / (precisions + recalls + 1e-10)
-    best_idx = np.argmax(f1s)
-    best_threshold = thresholds[best_idx] if best_idx < len(thresholds) else thresholds[-1]
-    best_f1 = f1s[best_idx]
+raw_preds = ocsvm_model.predict(X_test_scaled)
+y_pred_svm = [1 if p == -1 else 0 for p in raw_preds]
+scores_svm = -ocsvm_model.decision_function(X_test_scaled)
 
-    preds = (scores >= best_threshold).astype(int)
-    cm = confusion_matrix(y_true, preds)
-
-    print(f"\n--- {model_name} ---")
-    print(f"ROC-AUC:  {roc_auc:.4f}")
-    print(f"PR-AUC:   {pr_auc:.4f}")
-    print(f"Best F1:  {best_f1:.4f}  (at threshold {best_threshold:.4f})")
-    print(f"Confusion Matrix:\n{cm}")
-
-    return {"roc_auc": roc_auc, "pr_auc": pr_auc, "f1": best_f1, "cm": cm}
-
-iso_results = evaluate(y_test, iso_scores, "Isolation Forest")
-svm_results = evaluate(y_test, svm_scores, "One-Class SVM")
+svm_results = evaluate_model(y_test, y_pred_svm, scores_svm, model_name="OC-SVM")
 
 # ============================================================
-# STEP 6: Plot ROC curves
-# ============================================================
-plt.figure(figsize=(7, 6))
-for name, scores in [("Isolation Forest", iso_scores), ("One-Class SVM", svm_scores)]:
-    fpr, tpr, _ = roc_curve(y_test, scores)
-    auc = roc_auc_score(y_test, scores)
-    plt.plot(fpr, tpr, label=f"{name} (AUC={auc:.3f})")
-
-plt.plot([0, 1], [0, 1], linestyle="--", color="gray", label="Random guess")
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.title("ROC Curve Comparison")
-plt.legend()
-plt.tight_layout()
-plt.savefig("roc_comparison.png")
-plt.show()
-
-# ============================================================
-# STEP 7: Export scores for Aakash's comparison.ipynb
-# ------------------------------------------------------------
-# Aakash needs these model score arrays to build the final 3-way
-# comparison (vs. his autoencoder). One row per test-set sample:
-# the true label plus both models' raw anomaly scores. Format to
-# be confirmed with him -- this is a reasonable starting point.
+# STEP 6: Export scores for Aakash's comparison notebook
 # ============================================================
 results_df = pd.DataFrame({
     "true_label": np.asarray(y_test),
-    "iso_forest_score": iso_scores,
-    "oc_svm_score": svm_scores,
+    "iso_forest_score": scores_iso,
+    "oc_svm_score": scores_svm,
 })
 results_df.to_csv("model_scores_for_comparison.csv", index=False)
-print(f"\nSaved model scores to model_scores_for_comparison.csv ({len(results_df)} rows) -- for Aakash's comparison.ipynb")
+print(f"\nSaved scores to model_scores_for_comparison.csv ({len(results_df)} rows)")
 
-print("\nDone. Once real data is in place (USE_REAL_DATA = True), everything above runs unchanged.")
+print("\nDone.")
