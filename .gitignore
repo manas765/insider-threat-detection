@@ -1,10 +1,1 @@
-data/raw/
-*.pyc
-__pycache__/
-.ipynb_checkpoints/
-.DS_Storeroc_comparison.png  echo iso_forest_tuning_results.csv  echo oc_svm_tuning_results.csv  echo model_scores_for_comparison.csv 
-roc_comparison.png 
-roc_comparison.png  echo iso_forest_tuning_results echo oc_svm_tuning_results.csv  echo model_scores_for_comparison.csv 
-iso_forest_tuning_results.csv 
-oc_svm_tuning_results.csv 
-model_scores_for_comparison.csv 
+data/raw/ *.pyc __pycache__/ .ipynb_checkpoints/ .DS_Store venv/ roc_comparison.png iso_forest_tuning_results.csv oc_svm_tuning_results.csv model_scores_for_comparison.csv
