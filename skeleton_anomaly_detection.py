@@ -1,31 +1,31 @@
 """
 Isolation Forest + One-Class SVM -- Insider Threat Detection Project
-Person 2 (Pushkar)
+Person 2 (Pushkar) -- FINAL VERSION
 
-REAL DATA VERSION -- the fake-data/dummy-data era of this script is over.
-Manas's real dataset has landed and is confirmed usable (263,117 benign
-rows in X_train_benign.csv).
+Hyperparameters were tuned against a validation split carved out of
+X_train_raw.csv/y_train_raw.csv (per Manas's approved fix, to avoid
+repeatedly leaking information from X_test/y_test during search).
+X_test/y_test is touched EXACTLY ONCE below, for this final,
+reportable evaluation -- consistent with the team's methodology and
+notebooks/evaluate.py.
 
-FINAL locked feature set (8 columns). Note: X_train_benign.csv currently
-still contains a 9th column, file_copy_to_removable -- Manas investigated
-this feature and found it's broken for this dataset (USB activity is too
-dense/constant to meaningfully signal file copying) and recommended
-dropping it. The CSV export just hasn't been updated to remove it yet,
-so we explicitly select only the 8 confirmed-good columns below rather
-than trusting the file to already be clean.
+FINAL FEATURE SET (8 columns, confirmed by Manas):
+  login_hour, after_hours_flag, session_duration_mins, usb_events_count,
+  files_accessed_count, email_count, unique_domains_visited,
+  email_ext_recipient_count
+(file_copy_to_removable is present in the raw CSVs but excluded --
+Manas found it unreliable for this dataset and dropped it.)
 
-TRAINING METHODOLOGY (per notebooks/evaluate.py, and to avoid repeating
-the 100% AUC bug the team found):
-  - Train ONLY on X_train_benign.csv (already filtered to normal rows).
-  - Predict using each model's OWN built-in .predict() (the
-    contamination/nu threshold set at train time) -- NOT a
-    best-possible-F1 threshold searched over the test set. Searching
-    for the "best" threshold using test labels is a subtle form of
-    leakage/optimism bias, and is very likely part of why the earlier
-    comparison chart showed suspicious 100% scores.
-  - Evaluate through the SHARED notebooks/evaluate.py evaluate_model()
-    function, using its own X_test/y_test, so results stay comparable
-    with Aakash's and consistent with the team's methodology.
+FINAL TUNED HYPERPARAMETERS (chosen via clean validation-split search):
+  Isolation Forest: n_estimators=300, max_features=0.5,
+                     max_samples=65536, contamination=0.005
+  One-Class SVM:     nu=0.005, gamma=0.8
+
+Trained on the FULL X_train_benign.csv (not the reduced validation-
+split portion) since no validation set needs holding back anymore --
+maximizes training data for the final model.
+
+Results exported to reports/ for Aakash's comparison.ipynb.
 """
 
 import sys
@@ -52,15 +52,11 @@ FEATURE_COLUMNS = [
 X_train_benign = pd.read_csv("data/processed/X_train_benign.csv")[FEATURE_COLUMNS]
 X_test_features = X_test[FEATURE_COLUMNS]
 
-print(f"Train (benign only): {X_train_benign.shape}")
+print(f"Train (benign only, full set): {X_train_benign.shape}")
 print(f"Test: {X_test_features.shape}, malicious in test: {int(y_test.sum())} ({y_test.mean()*100:.2f}%)")
 
 # ============================================================
 # STEP 2: Scale features
-# ------------------------------------------------------------
-# evaluate.py's example doesn't scale, but OC-SVM (RBF kernel) is
-# sensitive to feature scale, so we scale anyway -- fit on train,
-# apply to test, standard practice.
 # ============================================================
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train_benign)
@@ -68,8 +64,6 @@ X_test_scaled = scaler.transform(X_test_features)
 
 # ============================================================
 # STEP 3: OC-SVM scalability guard
-# ------------------------------------------------------------
-# 263K rows is way past the ~50k practical limit for OC-SVM training.
 # ============================================================
 OC_SVM_MAX_TRAIN_SIZE = 30000
 if X_train_scaled.shape[0] > OC_SVM_MAX_TRAIN_SIZE:
@@ -81,21 +75,24 @@ else:
     X_train_svm = X_train_scaled
 
 # ============================================================
-# STEP 4: Train + evaluate Isolation Forest
+# STEP 4: Train + evaluate Isolation Forest (FINAL tuned params)
 # ============================================================
-iso_model = IsolationForest(n_estimators=200, contamination=0.02, random_state=RANDOM_STATE)
+iso_model = IsolationForest(
+    n_estimators=300, max_features=0.5, max_samples=65536,
+    contamination=0.005, random_state=RANDOM_STATE
+)
 iso_model.fit(X_train_scaled)
 
-raw_preds = iso_model.predict(X_test_scaled)           # -1 = anomaly, 1 = normal
-y_pred_iso = [1 if p == -1 else 0 for p in raw_preds]   # convert to match y_test (0/1)
-scores_iso = -iso_model.score_samples(X_test_scaled)    # higher = more anomalous
+raw_preds = iso_model.predict(X_test_scaled)
+y_pred_iso = [1 if p == -1 else 0 for p in raw_preds]
+scores_iso = -iso_model.score_samples(X_test_scaled)
 
 iso_results = evaluate_model(y_test, y_pred_iso, scores_iso, model_name="Isolation Forest")
 
 # ============================================================
-# STEP 5: Train + evaluate One-Class SVM
+# STEP 5: Train + evaluate One-Class SVM (FINAL tuned params)
 # ============================================================
-ocsvm_model = OneClassSVM(kernel="rbf", nu=0.02, gamma="scale")
+ocsvm_model = OneClassSVM(kernel="rbf", nu=0.005, gamma=0.8)
 ocsvm_model.fit(X_train_svm)
 
 raw_preds = ocsvm_model.predict(X_test_scaled)
@@ -105,14 +102,14 @@ scores_svm = -ocsvm_model.decision_function(X_test_scaled)
 svm_results = evaluate_model(y_test, y_pred_svm, scores_svm, model_name="OC-SVM")
 
 # ============================================================
-# STEP 6: Export scores for Aakash's comparison notebook
+# STEP 6: Export scores to reports/ for Aakash's comparison notebook
 # ============================================================
 results_df = pd.DataFrame({
     "true_label": np.asarray(y_test),
     "iso_forest_score": scores_iso,
     "oc_svm_score": scores_svm,
 })
-results_df.to_csv("model_scores_for_comparison.csv", index=False)
-print(f"\nSaved scores to model_scores_for_comparison.csv ({len(results_df)} rows)")
+results_df.to_csv("reports/model_scores_for_comparison.csv", index=False)
+print(f"\nSaved FINAL scores to reports/model_scores_for_comparison.csv ({len(results_df)} rows)")
 
-print("\nDone.")
+print("\nDone. This is the final, validated run -- X_test/y_test touched exactly once.")
