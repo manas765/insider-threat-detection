@@ -4,3 +4,9 @@ __pycache__/
 .ipynb_checkpoints/
 .DS_Store
 venv/
+roc_comparison.png
+iso_forest_tuning_results.csv
+oc_svm_tuning_results.csv
+model_scores_for_comparison.csv
+iso_forest_tuning_round2_results.csv
+oc_svm_tuning_round2_results.csv
