@@ -54,4 +54,3 @@ The data is **sorted by date** and split **80/20** (not random) — the first 80
 ## Key Finding
 One-Class SVM achieved the best practical detection (29.4% recall) despite having the lowest ROC-AUC (0.62) of the three models — demonstrating that ROC-AUC alone can be misleading under severe class imbalance. See `REPORT.md` for full results and discussion.
 
-**Deadline:** Aug 30
