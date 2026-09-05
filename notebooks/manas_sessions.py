@@ -138,6 +138,29 @@ for _, row in insiders_42.iterrows():
 print("\nLabel distribution:")
 print(merged['is_malicious'].value_counts())
 
+# ---------- PER-USER BASELINING (Phase 2) ----------
+merged = merged.sort_values(['user', 'day']).reset_index(drop=True)
+
+rolling_features = ['usb_events_count', 'files_accessed_count', 'email_count', 'session_duration_mins']
+
+for feat in rolling_features:
+    merged[f'{feat}_roll_mean'] = (
+        merged.groupby('user')[feat]
+        .transform(lambda x: x.shift(1).rolling(window=30, min_periods=5).mean())
+    )
+    merged[f'{feat}_roll_std'] = (
+        merged.groupby('user')[feat]
+        .transform(lambda x: x.shift(1).rolling(window=30, min_periods=5).std())
+    )
+    merged[f'{feat}_zscore'] = (
+        (merged[feat] - merged[f'{feat}_roll_mean']) / merged[f'{feat}_roll_std'].replace(0, 1)
+    )
+    merged[f'{feat}_zscore'] = merged[f'{feat}_zscore'].fillna(0)
+
+print("\nNew per-user baseline features added:")
+zscore_cols = [f'{feat}_zscore' for feat in rolling_features]
+print(merged[zscore_cols].describe())
+
 # ---------- 9. TIME-BASED SPLIT ----------
 merged = merged.sort_values('day').reset_index(drop=True)
 split_index = int(len(merged) * 0.8)
@@ -147,7 +170,9 @@ test = merged.iloc[split_index:]
 feature_cols = ['login_hour', 'after_hours_flag', 'session_duration_mins',
                  'usb_events_count', 'files_accessed_count', 'email_count',
                  'unique_domains_visited', 'email_ext_recipient_count',
-                 'file_copy_to_removable']
+                 'file_copy_to_removable',
+                 'usb_events_count_zscore', 'files_accessed_count_zscore',
+                 'email_count_zscore', 'session_duration_mins_zscore']
 
 X_train = train[feature_cols]
 y_train = train['is_malicious']
