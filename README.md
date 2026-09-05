@@ -7,9 +7,17 @@ ML project to detect insider threats using behavioral features extracted from th
 - **Pushkar** — Isolation Forest + One-Class SVM
 - **Aakash** — Autoencoder (v2)
 
-## Data Pipeline
+### Data Sources
+The CERT r4.2 insider threat dataset was used, drawing from five raw log files:
+- `logon.csv` — user login/logout activity
+- `device.csv` — USB device connect/disconnect events
+- `file.csv` — file access events
+- `email.csv` — email send activity
+- `http.csv` — web browsing activity
 
-Raw CERT r4.2 log files (`logon.csv`, `device.csv`, `file.csv`, `email.csv`, `http.csv`) are aggregated into **daily per-user features**.
+The raw dataset totaled approximately **4.7 GB**, with `http.csv` (web browsing logs) as the largest single source — large enough to require chunked processing (500,000-row batches) to read and aggregate efficiently.
+
+Each log was aggregated to a **daily, per-user level**, so every row in the final dataset represents one user's activity for one day.
 
 ### Features (9 total)
 
