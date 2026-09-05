@@ -161,18 +161,46 @@ print("\nNew per-user baseline features added:")
 zscore_cols = [f'{feat}_zscore' for feat in rolling_features]
 print(merged[zscore_cols].describe())
 
+# ---------- DAYS SINCE LAST SPIKE ----------
+merged['any_spike'] = (merged[zscore_cols].abs() > 2).any(axis=1).astype(int)
+
+def days_since_last_spike(group):
+    last_spike_day = None
+    result = []
+    for _, row in group.iterrows():
+        if last_spike_day is None:
+            result.append(999)  # no spike seen yet for this user
+        else:
+            result.append((row['day'] - last_spike_day).days)
+        if row['any_spike'] == 1:
+            last_spike_day = row['day']
+    return result
+
+merged['days_since_last_spike'] = (
+    merged.groupby('user', group_keys=False)
+    .apply(days_since_last_spike)
+    .explode()
+    .values
+)
+merged['days_since_last_spike'] = merged['days_since_last_spike'].astype(int)
+
+print("\ndays_since_last_spike stats:")
+print(merged['days_since_last_spike'].describe())
+
 # ---------- 9. TIME-BASED SPLIT ----------
 merged = merged.sort_values('day').reset_index(drop=True)
 split_index = int(len(merged) * 0.8)
 train = merged.iloc[:split_index]
 test = merged.iloc[split_index:]
 
+
 feature_cols = ['login_hour', 'after_hours_flag', 'session_duration_mins',
                  'usb_events_count', 'files_accessed_count', 'email_count',
                  'unique_domains_visited', 'email_ext_recipient_count',
                  'file_copy_to_removable',
                  'usb_events_count_zscore', 'files_accessed_count_zscore',
-                 'email_count_zscore', 'session_duration_mins_zscore']
+                 'email_count_zscore', 'session_duration_mins_zscore',
+                 'days_since_last_spike']
 
 X_train = train[feature_cols]
 y_train = train['is_malicious']
