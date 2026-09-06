@@ -112,4 +112,16 @@ results_df = pd.DataFrame({
 results_df.to_csv("reports/model_scores_for_comparison.csv", index=False)
 print(f"\nSaved FINAL scores to reports/model_scores_for_comparison.csv ({len(results_df)} rows)")
 
+# ============================================================
+# STEP 7: Save trained models -- Phase 2 scripts (SHAP, alert-fatigue,
+# and eventually Aakash's dashboard) reuse these instead of retraining.
+# ============================================================
+import os
+import joblib
+os.makedirs("models", exist_ok=True)
+joblib.dump(scaler, "models/scaler.pkl")
+joblib.dump(iso_model, "models/iso_forest.pkl")
+joblib.dump(ocsvm_model, "models/ocsvm.pkl")
+print("Saved trained models to models/ for reuse in Phase 2 scripts")
+
 print("\nDone. This is the final, validated run -- X_test/y_test touched exactly once.")
