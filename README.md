@@ -7,9 +7,17 @@ ML project to detect insider threats using behavioral features extracted from th
 - **Pushkar** — Isolation Forest + One-Class SVM
 - **Aakash** — Autoencoder (v2)
 
-## Data Pipeline
+### Data Sources
+The CERT r4.2 insider threat dataset was used, drawing from five raw log files:
+- `logon.csv` — user login/logout activity
+- `device.csv` — USB device connect/disconnect events
+- `file.csv` — file access events
+- `email.csv` — email send activity
+- `http.csv` — web browsing activity
 
-Raw CERT r4.2 log files (`logon.csv`, `device.csv`, `file.csv`, `email.csv`, `http.csv`) are aggregated into **daily per-user features**.
+The raw dataset totaled approximately **4.7 GB**, with `http.csv` (web browsing logs) as the largest single source — large enough to require chunked processing (500,000-row batches) to read and aggregate efficiently.
+
+Each log was aggregated to a **daily, per-user level**, so every row in the final dataset represents one user's activity for one day.
 
 ### Features (9 total)
 
@@ -46,9 +54,11 @@ The data is **sorted by date** and split **80/20** (not random) — the first 80
 
 ## Status
 - [x] Data pipeline built, labeled, split, exported
-- [ ] Isolation Forest + OC-SVM trained (Pushkar)
-- [ ] Autoencoder retrained on v2 data (Aakash)
-- [ ] Shared evaluation across all 3 models
-- [ ] Final report
+- [x] Isolation Forest + OC-SVM trained (Pushkar)
+- [x] Autoencoder retrained on v2 data (Aakash)
+- [x] Shared evaluation across all 3 models
+- [x] Final report
 
-**Deadline:** Aug 30
+## Key Finding
+One-Class SVM achieved the best practical detection (29.4% recall) despite having the lowest ROC-AUC (0.62) of the three models — demonstrating that ROC-AUC alone can be misleading under severe class imbalance. See `REPORT.md` for full results and discussion.
+
