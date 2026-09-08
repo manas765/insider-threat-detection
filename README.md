@@ -58,6 +58,20 @@ The data is **sorted by date** and split **80/20** (not random) — the first 80
 - [x] Autoencoder retrained on v2 data (Aakash)
 - [x] Shared evaluation across all 3 models
 - [x] Final report
+      
+## Phase 2 — In Progress
+
+Extending the project with personalized detection, explainability, and a live dashboard.
+
+| Task | Owner | Status |
+|---|---|---|
+| Per-user behavioral baselining (z-score features) | Manas | ✅ Done — 14 features total, pushed to main |
+| Risk-scoring ensemble (combine all 3 models) | Manas | 🔄 Waiting on retrained model outputs |
+| SHAP explainability (Isolation Forest, OC-SVM) | Pushkar | 🔄 In progress |
+| Alert fatigue / threshold sweep analysis | Pushkar | ✅ Done |
+| Model persistence | Pushkar | ✅ Done |
+| Interactive Streamlit dashboard | Aakash | ✅ Done — live locally, pending updated features |
+| SHAP explainability (Autoencoder) | Aakash | 🔄 Pending |
 
 ## Key Finding
 One-Class SVM achieved the best practical detection (29.4% recall) despite having the lowest ROC-AUC (0.62) of the three models — demonstrating that ROC-AUC alone can be misleading under severe class imbalance. See `REPORT.md` for full results and discussion.
