@@ -1,26 +1,23 @@
-# Insider Threat Detection (CERT r4.2)
+# 🔍 Insider Threat Detection (CERT r4.2)
 
-ML project to detect insider threats using behavioral features extracted from the CERT r4.2 dataset.
+An end-to-end machine learning pipeline for detecting insider threats from enterprise activity logs — built by a 3-person team using the CERT r4.2 dataset.
 
-## Team
-- **Manas** — data pipeline (feature engineering, labeling, train/test split, exports)
-- **Pushkar** — Isolation Forest + One-Class SVM
-- **Aakash** — Autoencoder (v2)
+## 🎯 Key Finding
+**One-Class SVM achieved the best practical detection (29.4% recall)** despite having the *lowest* ROC-AUC (0.62) of the three models — proving that ranking metrics like ROC-AUC can be misleading under severe class imbalance. See `REPORT.md` for full analysis.
 
-### Data Sources
-The CERT r4.2 insider threat dataset was used, drawing from five raw log files:
-- `logon.csv` — user login/logout activity
-- `device.csv` — USB device connect/disconnect events
-- `file.csv` — file access events
-- `email.csv` — email send activity
-- `http.csv` — web browsing activity
+## 👥 Team
+| Member | Phase 1 | Phase 2 |
+|---|---|---|
+| **Manas** | Data pipeline, feature engineering, labeling, train/test split | Per-user behavioral baselining, combined risk-scoring ensemble |
+| **Pushkar** | Isolation Forest + One-Class SVM | SHAP explainability, alert fatigue analysis, model persistence |
+| **Aakash** | Autoencoder | Interactive Streamlit dashboard, autoencoder explainability |
 
-The raw dataset totaled approximately **4.7 GB**, with `http.csv` (web browsing logs) as the largest single source — large enough to require chunked processing (500,000-row batches) to read and aggregate efficiently.
+## 📊 Data Pipeline
+Raw CERT r4.2 log files (~**4.7 GB**: `logon.csv`, `device.csv`, `file.csv`, `email.csv`, `http.csv`) are aggregated into **daily per-user behavioral features**.
 
-Each log was aggregated to a **daily, per-user level**, so every row in the final dataset represents one user's activity for one day.
+### Features (14 total)
 
-### Features (9 total)
-
+**Core activity features (9):**
 | Feature | Description |
 |---|---|
 | `login_hour` | Hour of first logon session that day |
@@ -30,49 +27,72 @@ Each log was aggregated to a **daily, per-user level**, so every row in the fina
 | `files_accessed_count` | Number of file access events that day |
 | `email_count` | Number of emails sent that day |
 | `unique_domains_visited` | Number of unique web domains visited that day |
-| `email_ext_recipient_count` | Number of emails sent to recipients outside the `dtaa.com` domain |
-| `file_copy_to_removable` | Number of file accesses that occurred during an active USB connect/disconnect window (possible exfiltration signal) |
+| `email_ext_recipient_count` | Number of emails sent outside the `dtaa.com` domain |
+| `file_copy_to_removable` | File access during an active USB connect/disconnect window (exfiltration signal) |
+
+**Per-user behavioral baseline features (5) — Phase 2:**
+| Feature | Description |
+|---|---|
+| `usb_events_count_zscore` | Today's USB count vs. this user's own 30-day rolling average |
+| `files_accessed_count_zscore` | Today's file access vs. this user's own norm |
+| `email_count_zscore` | Today's email count vs. this user's own norm |
+| `session_duration_mins_zscore` | Today's session length vs. this user's own norm |
+| `days_since_last_spike` | Days since this user last showed unusual activity (any z-score > 2) |
 
 ### Labeling
-
-Ground-truth malicious activity comes from `insiders.csv` (filtered to r4.2). A user-day is labeled `is_malicious = 1` if it falls within that user's known malicious activity window (`start` to `end` dates); otherwise `0`.
+Ground-truth malicious activity from `insiders.csv` (filtered to r4.2). A user-day is labeled `is_malicious = 1` if it falls within a known malicious activity window.
 
 ### Train/Test Split
-
-The data is **sorted by date** and split **80/20** (not random) — the first 80% of days become the train set, the last 20% become the test set. This mimics a real deployment where you train on past behavior and detect anomalies in future behavior.
+**Time-based 80/20 split** (not random) — trains on past behavior, evaluates on future behavior, avoiding lookahead leakage.
 
 ### Exported Files (`data/processed/`)
-
 | File | Contents | Intended use |
 |---|---|---|
-| `X_train_raw.csv` / `y_train_raw.csv` | Real, unresampled train data (all classes) | Models that need true class distribution |
-| `X_train_benign.csv` | Only benign (`is_malicious == 0`) train rows | **Autoencoder / one-class models** — train on "normal" behavior only |
-| `X_train_smote.csv` / `y_train_smote.csv` | SMOTE-balanced train data (synthetic minority samples added) | Supervised baseline models only — **do not use for unsupervised/anomaly models** |
+| `X_train_raw.csv` / `y_train_raw.csv` | Real, unresampled data | Models needing true class distribution |
+| `X_train_benign.csv` | Benign-only rows | **Anomaly detection models** (Isolation Forest, OC-SVM, Autoencoder) |
+| `X_train_smote.csv` / `y_train_smote.csv` | SMOTE-balanced data | Supervised baseline only — **not** for anomaly models |
 | `X_test.csv` / `y_test.csv` | Real, untouched test set | Evaluation for all models |
 
-⚠️ **Important:** Isolation Forest, OC-SVM, and the autoencoder should train on `X_train_benign.csv` or `X_train_raw.csv` — **not** `X_train_smote.csv`. SMOTE generates synthetic minority-class samples, which distorts what "normal" looks like for anomaly-detection models.
+⚠️ Anomaly detection models should train on `X_train_benign.csv` or `X_train_raw.csv` — **never** `X_train_smote.csv`.
 
-## Status
-- [x] Data pipeline built, labeled, split, exported
-- [x] Isolation Forest + OC-SVM trained (Pushkar)
-- [x] Autoencoder retrained on v2 data (Aakash)
-- [x] Shared evaluation across all 3 models
+## 📈 Results
+
+| Model | ROC-AUC | PR-AUC | Recall | Malicious Caught | False Positives |
+|---|---|---|---|---|---|
+| Isolation Forest | 0.84 | ~0.012 | 0.4% | 1 / 265 | Low |
+| Autoencoder | 0.71 | 0.0065 | 12.1% | 32 / 265 | 3,360 |
+| One-Class SVM | 0.62 | — | 29.4% | 78 / 265 | 4,630 |
+
+See `reports/roc_comparison.png` for the full ROC curve comparison and `reports/alert_fatigue_chart.png` for the precision-vs-workload tradeoff analysis.
+
+## 🧠 Explainability
+SHAP-based explanations reveal each model attends to different threat signatures:
+- **Isolation Forest** → USB activity + file access + unusual login timing (exfiltration pattern)
+- **One-Class SVM** → extremely long session durations (13-21+ hours)
+
+See `reports/iso_forest_explanations.csv` and `reports/ocsvm_explanations.csv`.
+
+## 🎛️ Combined Risk Scoring
+All three models' outputs are rescaled to 0-100 and combined into a single risk score per user-day — `reports/combined_risk_scores.csv` — mirroring real-world UEBA (User and Entity Behavior Analytics) security tools.
+
+## 🖥️ Dashboard
+An interactive Streamlit dashboard (`src/aakash/dashboard/app.py`) lets you explore per-user activity, flagged days, model comparisons, and risk scores.
+
+## ✅ Status
+
+**Phase 1 — Complete**
+- [x] Data pipeline, labeling, train/test split, exports
+- [x] Isolation Forest + OC-SVM trained
+- [x] Autoencoder trained
+- [x] Shared evaluation framework
 - [x] Final report
-      
-## Phase 2 — In Progress
 
-Extending the project with personalized detection, explainability, and a live dashboard.
+**Phase 2 — Complete**
+- [x] Per-user behavioral baselining (5 new features)
+- [x] SHAP explainability for all 3 models
+- [x] Alert fatigue / threshold sweep analysis
+- [x] Combined risk-scoring ensemble
+- [x] Interactive dashboard
 
-| Task | Owner | Status |
-|---|---|---|
-| Per-user behavioral baselining (z-score features) | Manas | ✅ Done — 14 features total, pushed to main |
-| Risk-scoring ensemble (combine all 3 models) | Manas | 🔄 Waiting on retrained model outputs |
-| SHAP explainability (Isolation Forest, OC-SVM) | Pushkar | 🔄 In progress |
-| Alert fatigue / threshold sweep analysis | Pushkar | ✅ Done |
-| Model persistence | Pushkar | ✅ Done |
-| Interactive Streamlit dashboard | Aakash | ✅ Done — live locally, pending updated features |
-| SHAP explainability (Autoencoder) | Aakash | 🔄 Pending |
-
-## Key Finding
-One-Class SVM achieved the best practical detection (29.4% recall) despite having the lowest ROC-AUC (0.62) of the three models — demonstrating that ROC-AUC alone can be misleading under severe class imbalance. See `REPORT.md` for full results and discussion.
-
+## 📄 Full Report
+See [`REPORT.md`](./REPORT.md) for the complete methodology, results, and discussion.
