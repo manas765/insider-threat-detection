@@ -94,6 +94,20 @@ Isolation Forest achieved the highest ROC-AUC (0.84) of the three models, yet at
 - **Severe class imbalance** (0.40% malicious) makes high recall inherently difficult without accepting a high false-positive rate — a fundamental trade-off in this problem domain, not specific to any one model.
 - **One-Class SVM's scalability limits** required training on a 30,000-row subsample of benign data rather than the full training set, which may have limited its ability to learn a more precise decision boundary.
 
+### Explainability Findings (SHAP)
+
+To make model decisions interpretable rather than opaque anomaly scores, SHAP-based explanations were generated for each flagged case in the Isolation Forest and One-Class SVM models, identifying the top contributing features behind each flag.
+
+**Isolation Forest** flagged cases based on a mix of signals, most commonly combinations of `usb_events_count`, `files_accessed_count`, `login_hour`, and `email_ext_recipient_count` — consistent with a classic exfiltration pattern (USB activity paired with file access at unusual hours, or high external email contact).
+
+**One-Class SVM**, by contrast, leaned heavily on `session_duration_mins` as its dominant signal — the majority of its flagged cases involved single login sessions lasting 800-1,300+ minutes (13-21+ hours), an extreme deviation from typical daily activity.
+
+This divergence suggests the two models are sensitive to different behavioral signatures of insider threat activity rather than simply agreeing or disagreeing on the same cases with different confidence. This supports the value of the combined risk-scoring ensemble (Section 5.2): rather than relying on a single model's blind spots, combining scores from models attentive to different signal types increases the chance of catching a wider range of threat behaviors.
+
+### Combined Risk Scoring
+
+To move beyond three separate, hard-to-compare model outputs, scores from Isolation Forest, One-Class SVM, and the Autoencoder were each rescaled to a common 0-100 range and averaged into a single **combined risk score** per user-day (`reports/combined_risk_scores.csv`). This produces one interpretable number per record — analogous to a "risk score" in real-world UEBA (User and Entity Behavior Analytics) security tools — rather than requiring an analyst to reconcile three separate model outputs manually.
+
 ## 6. Conclusion
 
 This project built an end-to-end pipeline for insider threat detection using the CERT r4.2 dataset, from raw log ingestion through feature engineering, labeling, and multi-model anomaly detection. Three models — Isolation Forest, One-Class SVM, and an Autoencoder — were trained and fairly compared using a shared evaluation framework. Results showed that ROC-AUC alone can be misleading under extreme class imbalance: One-Class SVM, despite a lower ROC-AUC, was the most practically useful model, catching nearly 30% of real malicious cases compared to Isolation Forest's near-zero detection rate at threshold.
