@@ -38,6 +38,9 @@ FEATURE_COLUMNS = [
     "login_hour", "after_hours_flag", "session_duration_mins",
     "usb_events_count", "files_accessed_count", "email_count",
     "unique_domains_visited", "email_ext_recipient_count",
+    "usb_events_count_zscore", "files_accessed_count_zscore",
+    "email_count_zscore", "session_duration_mins_zscore",
+    "days_since_last_spike",
 ]
 
 # ============================================================
