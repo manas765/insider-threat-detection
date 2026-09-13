@@ -1,18 +1,18 @@
-# 🔍 Insider Threat Detection (CERT r4.2)
+#  Insider Threat Detection (CERT r4.2)
 
 An end-to-end machine learning pipeline for detecting insider threats from enterprise activity logs — built by a 3-person team using the CERT r4.2 dataset.
 
-## 🎯 Key Finding
+##  Key Finding
 **One-Class SVM achieved the best practical detection (29.4% recall)** despite having the *lowest* ROC-AUC (0.62) of the three models — proving that ranking metrics like ROC-AUC can be misleading under severe class imbalance. See `REPORT.md` for full analysis.
 
-## 👥 Team
+##  Team
 | Member | Phase 1 | Phase 2 |
 |---|---|---|
 | **Manas** | Data pipeline, feature engineering, labeling, train/test split | Per-user behavioral baselining, combined risk-scoring ensemble |
 | **Pushkar** | Isolation Forest + One-Class SVM | SHAP explainability, alert fatigue analysis, model persistence |
 | **Aakash** | Autoencoder | Interactive Streamlit dashboard, autoencoder explainability |
 
-## 📊 Data Pipeline
+##  Data Pipeline
 Raw CERT r4.2 log files (~**4.7 GB**: `logon.csv`, `device.csv`, `file.csv`, `email.csv`, `http.csv`) are aggregated into **daily per-user behavioral features**.
 
 ### Features (14 total)
@@ -53,9 +53,9 @@ Ground-truth malicious activity from `insiders.csv` (filtered to r4.2). A user-d
 | `X_train_smote.csv` / `y_train_smote.csv` | SMOTE-balanced data | Supervised baseline only — **not** for anomaly models |
 | `X_test.csv` / `y_test.csv` | Real, untouched test set | Evaluation for all models |
 
-⚠️ Anomaly detection models should train on `X_train_benign.csv` or `X_train_raw.csv` — **never** `X_train_smote.csv`.
+ Anomaly detection models should train on `X_train_benign.csv` or `X_train_raw.csv` — **never** `X_train_smote.csv`.
 
-## 📈 Results
+##  Results
 
 | Model | ROC-AUC | PR-AUC | Recall | Malicious Caught | False Positives |
 |---|---|---|---|---|---|
@@ -65,20 +65,20 @@ Ground-truth malicious activity from `insiders.csv` (filtered to r4.2). A user-d
 
 See `reports/roc_comparison.png` for the full ROC curve comparison and `reports/alert_fatigue_chart.png` for the precision-vs-workload tradeoff analysis.
 
-## 🧠 Explainability
+##  Explainability
 SHAP-based explanations reveal each model attends to different threat signatures:
 - **Isolation Forest** → USB activity + file access + unusual login timing (exfiltration pattern)
 - **One-Class SVM** → extremely long session durations (13-21+ hours)
 
 See `reports/iso_forest_explanations.csv` and `reports/ocsvm_explanations.csv`.
 
-## 🎛️ Combined Risk Scoring
+##  Combined Risk Scoring
 All three models' outputs are rescaled to 0-100 and combined into a single risk score per user-day — `reports/combined_risk_scores.csv` — mirroring real-world UEBA (User and Entity Behavior Analytics) security tools.
 
-## 🖥️ Dashboard
+##  Dashboard
 An interactive Streamlit dashboard (`src/aakash/dashboard/app.py`) lets you explore per-user activity, flagged days, model comparisons, and risk scores.
 
-## ✅ Status
+##  Status
 
 **Phase 1 — Complete**
 - [x] Data pipeline, labeling, train/test split, exports
@@ -94,5 +94,5 @@ An interactive Streamlit dashboard (`src/aakash/dashboard/app.py`) lets you expl
 - [x] Combined risk-scoring ensemble
 - [x] Interactive dashboard
 
-## 📄 Full Report
+##  Full Report
 See [`REPORT.md`](./REPORT.md) for the complete methodology, results, and discussion.
