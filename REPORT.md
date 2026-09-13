@@ -104,6 +104,25 @@ To make model decisions interpretable rather than opaque anomaly scores, SHAP-ba
 
 This divergence suggests the two models are sensitive to different behavioral signatures of insider threat activity rather than simply agreeing or disagreeing on the same cases with different confidence. This supports the value of the combined risk-scoring ensemble (Section 5.2): rather than relying on a single model's blind spots, combining scores from models attentive to different signal types increases the chance of catching a wider range of threat behaviors.
 
+### ML vs. Rule-Based Detection (Phase 3)
+
+To justify the use of machine learning over simpler, commonly-deployed security approaches, a naive rule-based detector was built and evaluated on the same held-out test set using the same evaluation methodology. The rule flagged a user-day as malicious if:
+- `usb_events_count` exceeded 10, **or**
+- the login occurred after hours **and** `files_accessed_count` exceeded 20
+
+This mirrors the kind of simple, static threshold rules commonly used in basic security monitoring tools.
+
+**Results:**
+
+| Model | Recall | Malicious Caught | False Positives |
+|---|---|---|---|
+| Rule-Based Baseline | 0% | 0 / 265 | 180 |
+| Isolation Forest | 0.4% | 1 / 265 | Low |
+| Autoencoder | 12.1% | 32 / 265 | 3,360 |
+| One-Class SVM | 29.4% | 78 / 265 | 4,630 |
+
+The rule-based baseline **failed to catch a single malicious case** in the test set, despite still producing 180 false positives — meaning it would generate alert noise without providing any real detection value. Every ML model, even the weakest (Isolation Forest at 0.4% recall), outperformed the naive rule-based approach. This provides a concrete, quantified justification for the machine learning approach: insider threat behavior in this dataset is too subtle and multi-dimensional to be reliably captured by simple, static thresholds on individual features. Effective detection requires models capable of learning combinations and contextual patterns across features — exactly what Isolation Forest, One-Class SVM, and the Autoencoder are designed to do.
+
 ### Combined Risk Scoring
 
 To move beyond three separate, hard-to-compare model outputs, scores from Isolation Forest, One-Class SVM, and the Autoencoder were each rescaled to a common 0-100 range and averaged into a single **combined risk score** per user-day (`reports/combined_risk_scores.csv`). This produces one interpretable number per record — analogous to a "risk score" in real-world UEBA (User and Entity Behavior Analytics) security tools — rather than requiring an analyst to reconcile three separate model outputs manually.
