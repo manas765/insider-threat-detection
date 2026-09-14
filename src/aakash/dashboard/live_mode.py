@@ -6,7 +6,7 @@ import time
 st.set_page_config(page_title="Live Threat Monitor", layout="wide")
 st.title("Live Insider Threat Monitor")
 
-BASE = '/Users/aakashsairam/insider-threat-detection'
+BASE = "C:/Users/manas/insider-threat-detection"
 
 risk_df = pd.read_csv(f'{BASE}/reports/combined_risk_scores.csv', nrows=1000)
 risk_df['risk_score'] = risk_df['combined_risk_score'].round(2)
