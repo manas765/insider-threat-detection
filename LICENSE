@@ -1,22 +1,16 @@
-# Insider Threat Detection r4.2 License
+MIT License
 
 Copyright (c) 2026 Manas, Pushkar, Aakash
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this project and associated documentation files (the "Insider Threat Detection r4.2"),
-to use, copy, modify, and distribute the project for non-commercial purposes,
-subject to the following conditions:
+of this software and associated documentation files (the "Insider Threat Detection" project), to deal
+in the project without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the project, and to permit persons to whom the project is
+furnished to do so, subject to the following conditions:
 
-1. The above copyright notice and this license notice shall be included in all
-  copies or substantial portions of the project.
-
-2. The project, or any substantial portion of the project, may not be sold,
-   licensed for a fee, or used for commercial purposes without prior written
-   permission from the copyright holders.
-
-3. Modified versions of the project may be distributed for non-commercial
-   purposes, provided that the modifications are clearly identified and the
-   original copyright notice and this license remain included.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the project.
 
 THE PROJECT IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
