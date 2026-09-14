@@ -5,6 +5,70 @@ An end-to-end machine learning pipeline for detecting insider threats from enter
 ##  Key Finding
 **One-Class SVM achieved the best practical detection (29.4% recall)** despite having the *lowest* ROC-AUC (0.62) of the three models — proving that ranking metrics like ROC-AUC can be misleading under severe class imbalance. See `REPORT.md` for full analysis.
 
+## Setup & Installation
+
+### Prerequisites
+- Python 3.10+
+- Git
+
+### 1. Clone and enter the repo
+
+```bash
+git clone https://github.com/manas765/insider-threat-detection.git
+cd insider-threat-detection
+```
+
+### 2. Create and activate a virtual environment
+
+```powershell
+python -m venv venv
+venv\Scripts\activate
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Get the data
+This project uses the CERT r4.2 Insider Threat Dataset (~5GB) from Carnegie Mellon University Software Engineering Institute (SEI).
+
+Download:
+
+Official: https://www.cert.org/insider-threat/tools/index.cfm
+Kaggle mirror: https://www.kaggle.com/datasets/mrajaxnp/cert-insider-threat-detection-research
+
+Download CERT r4.2 and place the raw CSV files in:
+
+data/raw/
+
+The required files are:
+
+logon.csv
+device.csv
+file.csv
+email.csv
+http.csv
+insiders.csv
+
+Note: The dataset is not included in this repository due to its large size (~4.7 GB uncompressed). Download it separately before running the pipeline.
+
+
+### 5. Run the classical model pipeline
+Once `data/processed/*.csv` exist:
+
+```bash
+python run_pipeline.py # train + evaluate Isolation Forest and OC-SVM
+python run_pipeline.py --full # also runs alert-fatigue analysis + SHAP
+```
+
+### 6. Explore the dashboard
+
+```bash
+streamlit run src/aakash/dashboard/app.py
+```
+
 ##  Team
 | Member | Phase 1 | Phase 2 |
 |---|---|---|
