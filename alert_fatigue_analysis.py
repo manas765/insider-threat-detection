@@ -23,16 +23,35 @@ sys.path.append("notebooks")
 from evaluate import X_test, y_test
 
 FEATURE_COLUMNS = [
-    "login_hour", "after_hours_flag", "session_duration_mins",
-    "usb_events_count", "files_accessed_count", "email_count",
-    "unique_domains_visited", "email_ext_recipient_count",
+    "login_hour",
+    "after_hours_flag",
+    "session_duration_mins",
+    "usb_events_count",
+    "files_accessed_count",
+    "email_count",
+    "unique_domains_visited",
+    "email_ext_recipient_count",
+    "days_since_last_spike",
+    "email_count_zscore",
+    "files_accessed_count_zscore",
+    "session_duration_mins_zscore",
+    "usb_events_count_zscore"
 ]
-
-X_test_features = X_test[FEATURE_COLUMNS]
 
 scaler = joblib.load("models/scaler.pkl")
 iso_model = joblib.load("models/iso_forest.pkl")
 ocsvm_model = joblib.load("models/ocsvm.pkl")
+
+FEATURE_COLUMNS = list(scaler.feature_names_in_)
+
+missing_features = [col for col in FEATURE_COLUMNS if col not in X_test.columns]
+
+if missing_features:
+    raise ValueError(
+        f"Test data is missing required features: {missing_features}"
+    )
+
+X_test_features = X_test[FEATURE_COLUMNS]
 
 X_test_scaled = scaler.transform(X_test_features)
 
