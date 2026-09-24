@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import joblib
 
 # ---------- Load real test data + labels ----------
 X_test = pd.read_csv('data/processed/X_test.csv')
@@ -44,3 +45,49 @@ print(X_test_evaded.loc[malicious_idx[0]])
 # ---------- Save for re-evaluation ----------
 X_test_evaded.to_csv('data/processed/X_test_evaded_strategy1.csv', index=False)
 print("\nSaved evaded test set to data/processed/X_test_evaded_strategy1.csv")
+
+# ---------- Load saved models AND the OC-SVM scaler ----------
+iso_forest = joblib.load('models/isolation_forest.pkl')
+oc_svm = joblib.load('models/oc_svm.pkl')
+oc_svm_scaler = joblib.load('models/oc_svm_scaler.pkl')
+
+# ---------- Score ORIGINAL malicious cases ----------
+X_malicious_original = X_test.loc[malicious_idx]
+
+# Isolation Forest — no scaling needed
+iso_scores_before = iso_forest.predict(X_malicious_original)
+
+# OC-SVM — MUST scale using the same scaler fit during training
+X_malicious_original_scaled = oc_svm_scaler.transform(X_malicious_original)
+svm_scores_before = oc_svm.predict(X_malicious_original_scaled)
+
+caught_before_iso = (iso_scores_before == -1).sum()
+caught_before_svm = (svm_scores_before == -1).sum()
+
+# ---------- Score EVADED malicious cases ----------
+X_malicious_evaded = X_test_evaded.loc[malicious_idx]
+
+iso_scores_after = iso_forest.predict(X_malicious_evaded)
+
+X_malicious_evaded_scaled = oc_svm_scaler.transform(X_malicious_evaded)
+svm_scores_after = oc_svm.predict(X_malicious_evaded_scaled)
+
+caught_after_iso = (iso_scores_after == -1).sum()
+caught_after_svm = (svm_scores_after == -1).sum()
+
+# ---------- Report results ----------
+total = len(malicious_idx)
+print("\n===== Adversarial Evasion Results (Strategy 1: Smoothing) =====")
+print(f"Total malicious cases tested: {total}")
+print(f"\nIsolation Forest:")
+print(f"  Caught BEFORE evasion: {caught_before_iso} / {total}")
+print(f"  Caught AFTER evasion:  {caught_after_iso} / {total}")
+print(f"\nOne-Class SVM:")
+print(f"  Caught BEFORE evasion: {caught_before_svm} / {total}")
+print(f"  Caught AFTER evasion:  {caught_after_svm} / {total}")
+
+# ---------- Sanity check: overall flag rate on full test set ----------
+X_test_scaled = oc_svm_scaler.transform(X_test)
+all_preds = oc_svm.predict(X_test_scaled)
+flagged_count = (all_preds == -1).sum()
+print(f"\nSanity check — OC-SVM flags {flagged_count} / {len(X_test)} total rows as anomalous")

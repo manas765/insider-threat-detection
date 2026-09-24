@@ -2,79 +2,18 @@
 
 An end-to-end machine learning pipeline for detecting insider threats from enterprise activity logs — built by a 3-person team using the CERT r4.2 dataset.
 
-##  Key Finding
-**One-Class SVM achieved the best practical detection (29.4% recall)** despite having the *lowest* ROC-AUC (0.62) of the three models — proving that ranking metrics like ROC-AUC can be misleading under severe class imbalance. See `REPORT.md` for full analysis.
+##  Key Findings
+- **Per-user behavioral baselining dramatically improved detection.** After adding features that compare each user's activity to their own historical norm, One-Class SVM's recall jumped from 29.4% to 81.5%, and its ROC-AUC from 0.62 to 0.892.
+- **Machine learning meaningfully outperforms simple rules.** A naive rule-based detector caught 0 of 265 malicious cases in testing; every ML model caught more, with One-Class SVM catching ~216 of 265.
 
-## Setup & Installation
-
-### Prerequisites
-- Python 3.10+
-- Git
-
-### 1. Clone and enter the repo
-
-```bash
-git clone https://github.com/manas765/insider-threat-detection.git
-cd insider-threat-detection
-```
-
-### 2. Create and activate a virtual environment
-
-```powershell
-python -m venv venv
-venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Get the data
-This project uses the CERT r4.2 Insider Threat Dataset (~5GB) from Carnegie Mellon University Software Engineering Institute (SEI).
-
-Download:
-
-Official: https://www.cert.org/insider-threat/tools/index.cfm
-Kaggle mirror: https://www.kaggle.com/datasets/mrajaxnp/cert-insider-threat-detection-research
-
-Download CERT r4.2 and place the raw CSV files in:
-
-data/raw/
-
-The required files are:
-
-logon.csv
-device.csv
-file.csv
-email.csv
-http.csv
-insiders.csv
-
-Note: The dataset is not included in this repository due to its large size (~4.7 GB uncompressed). Download it separately before running the pipeline.
-
-
-### 5. Run the classical model pipeline
-Once `data/processed/*.csv` exist:
-
-```bash
-python run_pipeline.py # train + evaluate Isolation Forest and OC-SVM
-python run_pipeline.py --full # also runs alert-fatigue analysis + SHAP
-```
-
-### 6. Explore the dashboard
-
-```bash
-streamlit run src/aakash/dashboard/app.py
-```
+See `REPORT.md` for the full methodology and analysis.
 
 ##  Team
-| Member | Phase 1 | Phase 2 |
-|---|---|---|
-| **Manas** | Data pipeline, feature engineering, labeling, train/test split | Per-user behavioral baselining, combined risk-scoring ensemble |
-| **Pushkar** | Isolation Forest + One-Class SVM | SHAP explainability, alert fatigue analysis, model persistence |
-| **Aakash** | Autoencoder | Interactive Streamlit dashboard, autoencoder explainability |
+| Member | Phase 1 | Phase 2 | Phase 3 |
+|---|---|---|---|
+| **Manas** | Data pipeline, feature engineering, labeling, train/test split | Per-user behavioral baselining, combined risk-scoring ensemble | Rule-based baseline comparison |
+| **Pushkar** | Isolation Forest + One-Class SVM | SHAP explainability, alert fatigue analysis, model persistence | Open-source packaging (LICENSE, requirements.txt, `run_pipeline.py`) |
+| **Aakash** | Autoencoder | Interactive Streamlit dashboard, autoencoder explainability | Live-mode real-time monitoring agent |
 
 ##  Data Pipeline
 Raw CERT r4.2 log files (~**4.7 GB**: `logon.csv`, `device.csv`, `file.csv`, `email.csv`, `http.csv`) are aggregated into **daily per-user behavioral features**.
@@ -82,6 +21,7 @@ Raw CERT r4.2 log files (~**4.7 GB**: `logon.csv`, `device.csv`, `file.csv`, `em
 ### Features (14 total)
 
 **Core activity features (9):**
+
 | Feature | Description |
 |---|---|
 | `login_hour` | Hour of first logon session that day |
@@ -95,6 +35,7 @@ Raw CERT r4.2 log files (~**4.7 GB**: `logon.csv`, `device.csv`, `file.csv`, `em
 | `file_copy_to_removable` | File access during an active USB connect/disconnect window (exfiltration signal) |
 
 **Per-user behavioral baseline features (5) — Phase 2:**
+
 | Feature | Description |
 |---|---|
 | `usb_events_count_zscore` | Today's USB count vs. this user's own 30-day rolling average |
@@ -110,6 +51,7 @@ Ground-truth malicious activity from `insiders.csv` (filtered to r4.2). A user-d
 **Time-based 80/20 split** (not random) — trains on past behavior, evaluates on future behavior, avoiding lookahead leakage.
 
 ### Exported Files (`data/processed/`)
+
 | File | Contents | Intended use |
 |---|---|---|
 | `X_train_raw.csv` / `y_train_raw.csv` | Real, unresampled data | Models needing true class distribution |
@@ -121,11 +63,12 @@ Ground-truth malicious activity from `insiders.csv` (filtered to r4.2). A user-d
 
 ##  Results
 
-| Model | ROC-AUC | PR-AUC | Recall | Malicious Caught | False Positives |
-|---|---|---|---|---|---|
-| Isolation Forest | 0.84 | ~0.012 | 0.4% | 1 / 265 | Low |
-| Autoencoder | 0.71 | 0.0065 | 12.1% | 32 / 265 | 3,360 |
-| One-Class SVM | 0.62 | — | 29.4% | 78 / 265 | 4,630 |
+| Model | ROC-AUC | Recall | Malicious Caught | False Positives |
+|---|---|---|---|---|
+| Isolation Forest | 0.876 | — | — | — |
+| Autoencoder | 0.71 | 12.1% | 32 / 265 | 3,360 |
+| One-Class SVM | 0.892 | 81.5% | ~216 / 265 | — |
+| Rule-Based Baseline | — | 0% | 0 / 265 | 180 |
 
 See `reports/roc_comparison.png` for the full ROC curve comparison and `reports/alert_fatigue_chart.png` for the precision-vs-workload tradeoff analysis.
 
@@ -139,10 +82,38 @@ See `reports/iso_forest_explanations.csv` and `reports/ocsvm_explanations.csv`.
 ##  Combined Risk Scoring
 All three models' outputs are rescaled to 0-100 and combined into a single risk score per user-day — `reports/combined_risk_scores.csv` — mirroring real-world UEBA (User and Entity Behavior Analytics) security tools.
 
-##  Dashboard
-An interactive Streamlit dashboard (`src/aakash/dashboard/app.py`) lets you explore per-user activity, flagged days, model comparisons, and risk scores.
+##  Dashboard & Live Monitoring
+An interactive Streamlit dashboard (`src/aakash/dashboard/app.py`) lets you explore per-user activity, flagged days, model comparisons, and risk scores. A live-mode extension (`src/aakash/dashboard/live_mode.py`) simulates real-time event scoring, showing per-model scores, a combined risk score, and a live-updating miss-rate tracker.
 
-##  Status
+```bash
+streamlit run src/aakash/dashboard/app.py
+streamlit run src/aakash/dashboard/live_mode.py
+```
+
+##  ML vs. Rule-Based Detection
+A naive rule-based detector (flagging high USB activity or after-hours file access) was built for comparison. It caught **0 of 265** malicious cases in testing, while every ML model caught more — providing concrete justification for the machine learning approach over simple static thresholds. See `REPORT.md` for full analysis.
+
+##  Getting Started
+```bash
+# Clone the repo
+git clone https://github.com/manas765/insider-threat-detection.git
+cd insider-threat-detection
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up the CERT r4.2 raw dataset in data/raw/ (see below)
+
+# Run the full pipeline (trains and saves all models)
+python run_pipeline.py
+```
+
+**Dataset:** This project uses the CERT r4.2 Insider Threat Dataset (Carnegie Mellon University Software Engineering Institute). The raw dataset (~4.7 GB) is not included in this repo due to size — download it separately and place the raw CSVs in `data/raw/` before running the pipeline.
+
+##  License
+Released under the MIT License — see `LICENSE` for details.
+
+## Status
 
 **Phase 1 — Complete**
 - [x] Data pipeline, labeling, train/test split, exports
@@ -157,6 +128,11 @@ An interactive Streamlit dashboard (`src/aakash/dashboard/app.py`) lets you expl
 - [x] Alert fatigue / threshold sweep analysis
 - [x] Combined risk-scoring ensemble
 - [x] Interactive dashboard
+
+**Phase 3 — Complete**
+- [x] Rule-based baseline comparison
+- [x] Open-source packaging (LICENSE, requirements.txt, `run_pipeline.py`)
+- [x] Live-mode real-time monitoring agent
 
 ##  Full Report
 See [`REPORT.md`](./REPORT.md) for the complete methodology, results, and discussion.
