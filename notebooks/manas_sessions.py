@@ -194,6 +194,8 @@ train = merged.iloc[:split_index]
 test = merged.iloc[split_index:]
 
 
+
+
 feature_cols = ['login_hour', 'after_hours_flag', 'session_duration_mins',
                  'usb_events_count', 'files_accessed_count', 'email_count',
                  'unique_domains_visited', 'email_ext_recipient_count',
@@ -201,6 +203,11 @@ feature_cols = ['login_hour', 'after_hours_flag', 'session_duration_mins',
                  'usb_events_count_zscore', 'files_accessed_count_zscore',
                  'email_count_zscore', 'session_duration_mins_zscore',
                  'days_since_last_spike']
+
+# ---------- Export intermediate data WITH user + day (for role-based features) ----------
+train[['user', 'day'] + feature_cols + ['is_malicious']].to_csv('data/processed/train_with_ids.csv', index=False)
+test[['user', 'day'] + feature_cols + ['is_malicious']].to_csv('data/processed/test_with_ids.csv', index=False)
+print("\nExported ID-preserving versions to train_with_ids.csv / test_with_ids.csv")
 
 X_train = train[feature_cols]
 y_train = train['is_malicious']
