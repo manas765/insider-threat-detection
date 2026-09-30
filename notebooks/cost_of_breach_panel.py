@@ -36,3 +36,7 @@ def render_cost_of_breach_panel():
         f"Based on an estimated average cost of ${AVG_COST_PER_INSIDER_INCIDENT:,} per insider incident. "
         "Replace this with Akshata's cited source before the pitch."
     )
+
+if __name__ == "__main__":
+    st.set_page_config(page_title="Cost of Breach — Standalone Test")
+    render_cost_of_breach_panel()
