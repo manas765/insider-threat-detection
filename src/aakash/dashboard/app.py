@@ -10,7 +10,7 @@ st.set_page_config(page_title="Insider Threat Dashboard", layout="wide")
 st.title("Insider Threat Detection Dashboard")
 st.markdown("---")
 
-BASE = '/Users/aakashsairam/insider-threat-detection'
+BASE = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 
 @st.cache_data
 def load_data():
