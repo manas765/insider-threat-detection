@@ -82,10 +82,10 @@ tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Live Monitor", "Explainability", 
 with tab1:
     st.markdown("### Risk Score Distribution")
     threshold = st.slider("Flag threshold", 0, 100, 70)
-    combined["is_malicious"] = y_test
+    combined["true_label"] = y_test
     flagged = combined[combined["combined_risk_score"] >= threshold]
     total_threats = int(y_test.sum())
-    caught = int(flagged["is_malicious"].sum())
+    caught = int(flagged["true_label"].sum())
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Records", f"{len(combined):,}")
@@ -94,7 +94,7 @@ with tab1:
 
     st.markdown("#### Flagged Records")
     st.dataframe(
-        flagged[["combined_risk_score","iso_forest_scaled","oc_svm_scaled","autoencoder_scaled","is_malicious"]]
+        flagged[["combined_risk_score","iso_forest_scaled","oc_svm_scaled","autoencoder_scaled","true_label"]]
         .sort_values("combined_risk_score", ascending=False).head(50),
         use_container_width=True
     )
@@ -105,7 +105,7 @@ with tab1:
     workload, recall_list = [], []
     for t in thresholds:
         ft = combined[combined["combined_risk_score"] >= t]
-        ct = int(ft["is_malicious"].sum())
+        ct = int(ft["true_label"].sum())
         workload.append(len(ft))
         recall_list.append(round(ct / total_threats * 100, 1) if total_threats > 0 else 0)
     fatigue_df = pd.DataFrame({"threshold": list(thresholds), "alerts_to_review": workload, "threats_caught_pct": recall_list})
@@ -153,7 +153,7 @@ with tab1:
         uid   = i + 1
         name  = EMP_NAMES[i % len(EMP_NAMES)]
         score = round(float(crow["combined_risk_score"]), 1)
-        mal   = int(crow.get("is_malicious", 0))
+        mal   = int(crow.get("true_label", 0))
         if rf is not None and i < len(rf):
             row_r = rf.iloc[i]
             role  = str(row_r.get("role", ALL_ROLES[i % len(ALL_ROLES)]))
@@ -259,7 +259,7 @@ with tab2:
         seen, alerts, threats_caught = [], 0, 0
         for i, row in data.iterrows():
             score = float(row["combined_risk_score"])
-            label = int(row.get("true_label", row.get("is_malicious", 0)))
+            label = int(row.get("true_label", row.get("true_label", 0)))
             seen.append({"index": len(seen), "risk_score": score})
             if score >= alert_thresh:
                 alerts += 1
