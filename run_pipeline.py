@@ -300,17 +300,15 @@ def train_and_evaluate():
     # Build final model-score dataframe.
     # ------------------------------------------------------------------
     results_df = pd.DataFrame({
+        "user": X_test_role["user"].reset_index(drop=True),
+        "day": X_test_role["day"].reset_index(drop=True),
+        "role": X_test_role["role"].reset_index(drop=True),
         "true_label": np.asarray(y_test),
-
         "iso_forest_score": scores_iso,
-
         "oc_svm_score": scores_svm,
-
         "iso_forest_risk": iso_risk,
-
         "oc_svm_risk": svm_risk,
-
-        "combined_risk_score": combined_risk_score,
+    "combined_risk_score": combined_risk_score,
     })
 
     # ------------------------------------------------------------------
