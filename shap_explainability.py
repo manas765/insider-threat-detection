@@ -15,17 +15,25 @@ matches the real use case: a dashboard only needs to explain the
 alerts an analyst actually opens, not every row in the test set.
 
 Requires: pip install shap --break-system-packages
-Loads the ALREADY-TRAINED models saved by skeleton_anomaly_detection.py.
+Loads the ALREADY-TRAINED models saved by run_pipeline.py.
 """
 
 import sys
+import os
+
 import numpy as np
 import pandas as pd
 import joblib
 import shap
 
 sys.path.append("notebooks")
-from evaluate import X_test, y_test
+from evaluate import y_test
+
+
+# ============================================================
+# Feature configuration
+# Must exactly match run_pipeline.py
+# ============================================================
 
 FEATURE_COLUMNS = [
     "login_hour",
@@ -41,69 +49,254 @@ FEATURE_COLUMNS = [
     "email_count_zscore",
     "session_duration_mins_zscore",
     "days_since_last_spike",
+    "role_usb_events_count_zscore",
+    "role_files_accessed_count_zscore",
+    "role_email_count_zscore",
+    "role_session_duration_mins_zscore",
+    "role_after_hours_deviation",
 ]
 
-TOP_N_SVM = 100  # cap on how many OC-SVM cases get explained (KernelExplainer is slow)
 
-X_test_features = X_test[FEATURE_COLUMNS].reset_index(drop=True)
+TOP_N_SVM = 100
+# Cap on how many OC-SVM cases get explained.
+# KernelExplainer is substantially slower than TreeExplainer.
+
+
+# ============================================================
+# Load role-aware test data
+# ============================================================
+
+X_test_role = pd.read_csv(
+    "data/processed/test_role_features.csv"
+)
+
+X_test_features = X_test_role[
+    FEATURE_COLUMNS
+].reset_index(drop=True)
+
+
+# Safety check: labels must align with the role-aware test data.
+role_labels = X_test_role["is_malicious"].reset_index(drop=True)
+evaluation_labels = pd.Series(y_test).reset_index(drop=True)
+
+if not role_labels.equals(evaluation_labels):
+    raise ValueError(
+        "Label alignment check failed: "
+        "test_role_features.csv and y_test.csv do not contain "
+        "the same labels in the same row order."
+    )
+
+print(
+    f"Loaded role-aware test data: "
+    f"{X_test_features.shape[0]} rows, "
+    f"{X_test_features.shape[1]} features"
+)
+
+print(
+    f"Test malicious cases: "
+    f"{int(evaluation_labels.sum())}"
+)
+
+
+# ============================================================
+# Load trained models
+# ============================================================
 
 scaler = joblib.load("models/scaler.pkl")
 iso_model = joblib.load("models/iso_forest.pkl")
 ocsvm_model = joblib.load("models/ocsvm.pkl")
 
+
+# ============================================================
+# Scale test data using the production scaler
+# ============================================================
+
 X_test_scaled = scaler.transform(X_test_features)
-X_test_scaled_df = pd.DataFrame(X_test_scaled, columns=FEATURE_COLUMNS)
+
+X_test_scaled_df = pd.DataFrame(
+    X_test_scaled,
+    columns=FEATURE_COLUMNS,
+)
 
 
-def top_features_explanation(shap_row, feature_names, original_row, n=3):
-    """Return a readable string naming the top-n features driving this score,
-    with their ACTUAL (unscaled) values for context an analyst can read."""
+def top_features_explanation(
+    shap_row,
+    feature_names,
+    original_row,
+    n=3,
+):
+    """
+    Return a readable string naming the top-n features driving
+    the anomaly score, with their actual unscaled values.
+    """
+
     order = np.argsort(-np.abs(shap_row))[:n]
-    parts = [f"{feature_names[i]}={original_row[feature_names[i]]:.1f}" for i in order]
+
+    parts = [
+        f"{feature_names[i]}={original_row[feature_names[i]]:.1f}"
+        for i in order
+    ]
+
     return "; ".join(parts)
+
+
+# ============================================================
+# Prepare output directory
+# ============================================================
+
+os.makedirs("reports", exist_ok=True)
 
 
 # ============================================================
 # Isolation Forest -- TreeExplainer
 # ============================================================
-raw_preds_iso = iso_model.predict(X_test_scaled)
-flagged_iso_idx = np.where(raw_preds_iso == -1)[0]
-print(f"Isolation Forest flagged {len(flagged_iso_idx)} cases")
 
-print("Computing SHAP values for Isolation Forest (TreeExplainer, fast)...")
+raw_preds_iso = iso_model.predict(X_test_scaled)
+
+flagged_iso_idx = np.where(raw_preds_iso == -1)[0]
+
+print(
+    f"\nIsolation Forest flagged "
+    f"{len(flagged_iso_idx)} cases"
+)
+
+print(
+    "Computing SHAP values for Isolation Forest "
+    "(TreeExplainer, fast)..."
+)
+
 iso_explainer = shap.TreeExplainer(iso_model)
-iso_shap_values = iso_explainer.shap_values(X_test_scaled_df.iloc[flagged_iso_idx])
+
+iso_shap_values = iso_explainer.shap_values(
+    X_test_scaled_df.iloc[flagged_iso_idx]
+)
+
 
 iso_explanations = []
+
 for pos, row_idx in enumerate(flagged_iso_idx):
-    reason = top_features_explanation(iso_shap_values[pos], FEATURE_COLUMNS, X_test_features.iloc[row_idx])
-    iso_explanations.append({"row_index": int(row_idx), "top_reasons": reason})
 
-pd.DataFrame(iso_explanations).to_csv("reports/iso_forest_explanations.csv", index=False)
-print(f"Saved {len(iso_explanations)} explanations to reports/iso_forest_explanations.csv\n")
+    reason = top_features_explanation(
+        iso_shap_values[pos],
+        FEATURE_COLUMNS,
+        X_test_features.iloc[row_idx],
+    )
+
+    iso_explanations.append(
+        {
+            "row_index": int(row_idx),
+            "top_reasons": reason,
+        }
+    )
+
+
+pd.DataFrame(
+    iso_explanations
+).to_csv(
+    "reports/iso_forest_explanations.csv",
+    index=False,
+)
+
+print(
+    f"Saved {len(iso_explanations)} explanations to "
+    "reports/iso_forest_explanations.csv\n"
+)
+
 
 # ============================================================
-# One-Class SVM -- KernelExplainer (slower, so capped to TOP_N)
+# One-Class SVM -- KernelExplainer
 # ============================================================
-svm_scores = -ocsvm_model.decision_function(X_test_scaled)
-raw_preds_svm = ocsvm_model.predict(X_test_scaled)
-flagged_svm_idx = np.where(raw_preds_svm == -1)[0]
-print(f"OC-SVM flagged {len(flagged_svm_idx)} cases -- explaining top {TOP_N_SVM} by score to keep runtime reasonable")
 
-top_order = np.argsort(-svm_scores[flagged_svm_idx])[:TOP_N_SVM]
-flagged_svm_idx_sample = flagged_svm_idx[top_order]
+scores_df = pd.read_csv(
+    "reports/model_scores_for_comparison.csv"
+)
 
-print("Computing SHAP values for OC-SVM (KernelExplainer -- this will take a few minutes)...")
-background = shap.sample(X_test_scaled_df, 100, random_state=42)
-svm_explainer = shap.KernelExplainer(ocsvm_model.decision_function, background)
-svm_shap_values = svm_explainer.shap_values(X_test_scaled_df.iloc[flagged_svm_idx_sample], nsamples=100)
+svm_scores = scores_df["oc_svm_score"].to_numpy()
+
+# The OC-SVM was trained with nu=0.005, so approximately
+# 0.5% of observations are expected to be classified as anomalous.
+# Use the highest-scoring cases for SHAP explanation instead of
+# running the expensive predict() call over the entire test set.
+TOP_N_SVM = 100
+
+flagged_svm_idx = np.argsort(
+    -svm_scores
+)[:TOP_N_SVM]
+
+print(
+    f"OC-SVM anomaly scores loaded from "
+    f"reports/model_scores_for_comparison.csv"
+)
+
+print(
+    f"Explaining top {len(flagged_svm_idx)} "
+    f"OC-SVM anomalies by anomaly score"
+)
+
+print(
+    f"OC-SVM flagged {len(flagged_svm_idx)} cases "
+    f"-- explaining top {TOP_N_SVM} by score "
+    "to keep runtime reasonable"
+)
+
+print(
+    "Computing SHAP values for OC-SVM "
+    "(KernelExplainer -- this will take a few minutes)..."
+)
+
+
+background = shap.sample(
+    X_test_scaled_df,
+    100,
+    random_state=42,
+)
+
+
+svm_explainer = shap.KernelExplainer(
+    ocsvm_model.decision_function,
+    background,
+)
+
+
+svm_shap_values = svm_explainer.shap_values(
+    X_test_scaled_df.iloc[flagged_svm_idx],
+    nsamples=100,
+)
 
 svm_explanations = []
-for pos, row_idx in enumerate(flagged_svm_idx_sample):
-    reason = top_features_explanation(svm_shap_values[pos], FEATURE_COLUMNS, X_test_features.iloc[row_idx])
-    svm_explanations.append({"row_index": int(row_idx), "top_reasons": reason})
 
-pd.DataFrame(svm_explanations).to_csv("reports/ocsvm_explanations.csv", index=False)
-print(f"Saved {len(svm_explanations)} explanations to reports/ocsvm_explanations.csv")
+for pos, row_idx in enumerate(
+    flagged_svm_idx
+):
 
-print("\nDone. These per-case explanations are what Aakash's dashboard will display.")
+    reason = top_features_explanation(
+        svm_shap_values[pos],
+        FEATURE_COLUMNS,
+        X_test_features.iloc[row_idx],
+    )
+
+    svm_explanations.append(
+        {
+            "row_index": int(row_idx),
+            "top_reasons": reason,
+        }
+    )
+
+
+pd.DataFrame(
+    svm_explanations
+).to_csv(
+    "reports/ocsvm_explanations.csv",
+    index=False,
+)
+
+
+print(
+    f"Saved {len(svm_explanations)} explanations to "
+    "reports/ocsvm_explanations.csv"
+)
+
+print(
+    "\nDone. These per-case explanations are what "
+    "Aakash's dashboard will display."
+)
