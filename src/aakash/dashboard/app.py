@@ -66,19 +66,43 @@ with tab1:
     mock_users = [f"User_{i:04d}" for i in range(1, 11)]
     selected_user = st.selectbox("Select Employee", mock_users)
 
-    # TODO: Replace this block with real role columns from Pushkar's output
-    # Expected columns: employee_role, role_usb_zscore, role_files_zscore,
-    #                   role_session_zscore, role_email_zscore
-    import random
-    random.seed(hash(selected_user) % 1000)
-    mock_role_data = {
-        "role": random.choice(["Finance", "IT", "HR", "Engineering", "Sales"]),
-        "risk_score": random.randint(55, 95),
-        "usb_deviation": random.choice(["HIGH", "HIGH", "NORMAL", "LOW"]),
-        "file_deviation": random.choice(["HIGH", "HIGH", "NORMAL", "LOW"]),
-        "session_deviation": random.choice(["NORMAL", "LOW", "HIGH"]),
-        "email_deviation": random.choice(["HIGH", "NORMAL", "NORMAL"]),
-    }
+    # Load Pushkar's role features
+    role_csv = f'{BASE}/data/processed/test_role_features.csv'
+    import os as _os
+    if _os.path.exists(role_csv):
+        role_df = pd.read_csv(role_csv)
+        # Pick a row by index based on selected_user
+        idx = int(selected_user.split('_')[1]) % len(role_df)
+        row = role_df.iloc[idx]
+
+        def zscore_to_level(z):
+            try:
+                z = float(z)
+                if z > 1.5: return "HIGH"
+                elif z < -1.0: return "LOW"
+                else: return "NORMAL"
+            except: return "NORMAL"
+
+        mock_role_data = {
+            "role": str(row.get('role', 'Unknown')),
+            "risk_score": 75,
+            "usb_deviation": zscore_to_level(row.get('role_usb_events_count_zscore', 0)),
+            "file_deviation": zscore_to_level(row.get('role_files_accessed_count_zscore', 0)),
+            "session_deviation": zscore_to_level(row.get('role_session_duration_mins_zscore', 0)),
+            "email_deviation": zscore_to_level(row.get('role_email_count_zscore', 0)),
+        }
+    else:
+        # Fallback mock if CSV not present
+        import random
+        random.seed(hash(selected_user) % 1000)
+        mock_role_data = {
+            "role": random.choice(["Finance", "IT", "HR", "Engineering", "Sales"]),
+            "risk_score": random.randint(55, 95),
+            "usb_deviation": random.choice(["HIGH", "HIGH", "NORMAL", "LOW"]),
+            "file_deviation": random.choice(["HIGH", "HIGH", "NORMAL", "LOW"]),
+            "session_deviation": random.choice(["NORMAL", "LOW", "HIGH"]),
+            "email_deviation": random.choice(["HIGH", "NORMAL", "NORMAL"]),
+        }
 
     def deviation_badge(level):
         colors = {"HIGH": "🔴", "NORMAL": "🟡", "LOW": "🟢"}
@@ -156,7 +180,7 @@ with tab3:
     try:
         import shap, joblib
         import traceback
-        model_path = f'{BASE}/models/isolation_forest.pkl'
+        model_path = f'{BASE}/models/iso_forest.pkl'
         if os.path.exists(model_path):
             model = joblib.load(model_path)
             sample = X_test.head(200)
